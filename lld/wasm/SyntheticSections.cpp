@@ -960,4 +960,9 @@ void BuildIdSection::writeBuildId(llvm::ArrayRef<uint8_t> buf) {
   memcpy(hashPlaceholderPtr, buf.data(), hashSize);
 }
 
+void BranchHintSection::writeBody() {
+  for (const InputFunction *f : out.functionSec->inputFunctions) {
+  }
+}
+
 } // namespace wasm::lld
