@@ -467,6 +467,43 @@ private:
   uint8_t *hashPlaceholderPtr = nullptr;
 };
 
+class BranchHintSection : public SyntheticSection {
+public:
+  BranchHintSection(ArrayRef<OutputSegment *> segments)
+      : SyntheticSection(llvm::wasm::WASM_SEC_CUSTOM, "metadata.code.branch_hint"),
+        segments(segments) {}
+  bool isNeeded() const override {
+    if (ctx.arg.stripAll && !ctx.arg.keepSections.count(name))
+      return false;
+    return numHints() > 0;
+  }
+  void writeBody() override;
+  size_t numHints() const {
+    size_t total = 0;
+    for (auto& funcHints : funcHintsVec) {
+      total += funcHints.hints.size();
+    }
+    return total;
+  }
+
+protected:
+  // A hint for an instruction.
+  struct Hint {
+    // TODO expr loc
+    bool likely;
+  };
+
+  // All the hints in a function.
+  struct FuncHints {
+    StringRef funcName;
+    std::vector<Hint> hints;
+  };
+
+  std::vector<FuncHints> funcHintsVec;
+
+  ArrayRef<OutputSegment *> segments;
+};
+
 // Linker generated output sections
 struct OutStruct {
   DylinkSection *dylinkSec;
@@ -486,6 +523,7 @@ struct OutStruct {
   ProducersSection *producersSec;
   TargetFeaturesSection *targetFeaturesSec;
   BuildIdSection *buildIdSec;
+  BranchHintSection *branchHintSec;
 };
 
 extern OutStruct out;
