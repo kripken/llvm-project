@@ -94,7 +94,7 @@ void WebAssemblyBranchHinting::visitBranchInst(BranchInst &I) {
   if (!TrueWeight || !FalseWeight)
     return;
 
-  std::cout << "waka " << TrueWeight->getZExtValue() << " : " << FalseWeight->getZExtValue() << '\n';
+  errs() << "waka " << TrueWeight->getZExtValue() << " : " << FalseWeight->getZExtValue() << '\n';
 
   // Generate metadata for wasm.
   // TODO
