@@ -558,7 +558,6 @@ void Writer::addSections() {
   addSection(out.producersSec);
   addSection(out.targetFeaturesSec);
   addSection(out.buildIdSec);
-  addSection(out.branchHintSec);
 }
 
 void Writer::finalizeSections() {
@@ -1703,7 +1702,6 @@ void Writer::createSyntheticSectionsPostLayout() {
   out.dataCountSec = make<DataCountSection>(segments);
   out.linkingSec = make<LinkingSection>(initFunctions, segments);
   out.nameSec = make<NameSection>(segments);
-  out.branchHintSec = make<BranchHintSection>(segments);
 }
 
 void Writer::run() {
