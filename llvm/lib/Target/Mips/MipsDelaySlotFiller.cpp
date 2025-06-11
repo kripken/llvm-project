@@ -875,7 +875,7 @@ MipsDelaySlotFiller::selectSuccBB(MachineBasicBlock &B) const {
   if (B.succ_empty())
     return nullptr;
 
-  // Select the successor with the larget edge weight.
+  // Select the successor with the largest edge weight.
   auto &Prob = getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
   MachineBasicBlock *S =
       *llvm::max_element(B.successors(), [&](const MachineBasicBlock *Dst0,

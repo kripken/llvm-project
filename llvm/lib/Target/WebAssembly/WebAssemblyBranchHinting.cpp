@@ -14,6 +14,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+
 #include "WebAssembly.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/InstVisitor.h"
@@ -25,86 +26,80 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
-
-
+//?
+#include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
+#include "WebAssembly.h"
+#include "WebAssemblyMachineFunctionInfo.h"
+#include "WebAssemblySubtarget.h"
+#include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
+#include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-#define DEBUG_TYPE "wasm-branch-hint"
+#define DEBUG_TYPE "wasm-branch-hinting"
 
 namespace {
-class WebAssemblyBranchHinting final : public FunctionPass,
-                               public InstVisitor<WebAssemblyBranchHinting> {
+class WebAssemblyBranchHinting final : public MachineFunctionPass {
   StringRef getPassName() const override {
-    return "WebAssembly Branch Hint";
+    return "WebAssembly Lower br_unless";
   }
 
-  bool runOnFunction(Function &F) override;
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<MachineBranchProbabilityInfoWrapperPass>();
+    AU.setPreservesCFG();
+    MachineFunctionPass::getAnalysisUsage(AU);
+  }
+
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
 public:
-  static char ID;
-  WebAssemblyBranchHinting() : FunctionPass(ID) {}
-
-  void visitBranchInst(BranchInst &I);
+  static char ID; // Pass identification, replacement for typeid
+  WebAssemblyBranchHinting() : MachineFunctionPass(ID) {}
 };
-} // End anonymous namespace
+} // end anonymous namespace
 
 char WebAssemblyBranchHinting::ID = 0;
 INITIALIZE_PASS(WebAssemblyBranchHinting, DEBUG_TYPE,
-                "Emit WebAssembly branch hints",
-                false, false)
+                "Emits branch hints", false, false)
 
 FunctionPass *llvm::createWebAssemblyBranchHinting() {
   return new WebAssemblyBranchHinting();
 }
 
-void WebAssemblyBranchHinting::visitBranchInst(BranchInst &I) {
-  // Check for profiling metadata of the right size and contents (beginning with
-  // "branch_weights").
-  MDNode *ProfMD = I.getMetadata(LLVMContext::MD_prof);
-  if (!ProfMD)
-    return;
-  if (ProfMD->getNumOperands() == 0)
-    return;
-  MDString *MDName = dyn_cast<MDString>(ProfMD->getOperand(0));
-  if (!MDName || MDName->getString() != "branch_weights")
-    return;
+bool WebAssemblyBranchHinting::runOnMachineFunction(MachineFunction &MF) {
+  LLVM_DEBUG(dbgs() << "********** Emitting branch hints **********\n"
+                       "********** Function: "
+                    << MF.getName() << '\n');
 
-  // We expect two integers, for the true and false weights.
-  if (ProfMD->getNumOperands() < 3)
-    return;
+  const MachineBranchProbabilityInfo *MBPI =
+      &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
 
-  // Operand indices for weights, assuming no "expected" operand appears before
-  // them (which we ignore).
-  unsigned TrueWeightOp = 1;
-  unsigned FalseWeightOp = 2;
+  auto &MFI = *MF.getInfo<WebAssemblyFunctionInfo>();
+  const auto &TII = *MF.getSubtarget<WebAssemblySubtarget>().getInstrInfo();
+  auto &MRI = MF.getRegInfo();
 
-  // Skip "expected", if present.
-  if (isa<MDString>(ProfMD->getOperand(1))) {
-    if (ProfMD->getNumOperands() < 4)
-      return;
-    ++TrueWeightOp;
-    ++FalseWeightOp;
+  for (auto &MBB : MF) {
+    for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
+      if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
+          MI.getOpcode() != WebAssembly::BR_IF)
+        continue;
+
+      // This is a BR. It has two successors, and perhaps branch probability
+      // info between them.
+      errs() << MI << '\n';
+      assert(MBB.succ_size() == 2);
+      auto iter = MBB.succ_begin();
+      MachineBasicBlock* first = *iter;
+      iter++;
+      MachineBasicBlock* second = *iter;
+
+      BranchProbability probFirst = MBPI->getEdgeProbability(&MBB, first);
+      BranchProbability probSecond = MBPI->getEdgeProbability(&MBB, second);
+      errs() << probFirst << " : " << probSecond << '\n';
+    }
   }
 
-  ConstantInt *TrueWeight =
-    mdconst::extract<ConstantInt>(ProfMD->getOperand(TrueWeightOp));
-  ConstantInt *FalseWeight =
-    mdconst::extract<ConstantInt>(ProfMD->getOperand(FalseWeightOp));
-
-  if (!TrueWeight || !FalseWeight)
-    return;
-
-  errs() << "seeing weights: " << TrueWeight->getZExtValue() << " : " << FalseWeight->getZExtValue() << '\n';
-
-  // Generate metadata for wasm.
-  // TODO
-}
-
-bool WebAssemblyBranchHinting::runOnFunction(Function &F) {
-  LLVM_DEBUG(dbgs() << "********** Emit wasm branch hints **********\n"
-                       "********** Function: "
-                    << F.getName() << '\n');
-
-  visit(F);
   return true;
 }

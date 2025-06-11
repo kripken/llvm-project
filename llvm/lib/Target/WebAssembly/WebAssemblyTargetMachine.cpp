@@ -498,9 +498,6 @@ void WebAssemblyPassConfig::addIRPasses() {
   // Expand indirectbr instructions to switches.
   addPass(createIndirectBrExpandPass());
 
-  // TODO flag
-  addPass(createWebAssemblyBranchHinting());
-
   TargetPassConfig::addIRPasses();
 }
 
@@ -641,6 +638,9 @@ void WebAssemblyPassConfig::addPreEmitPass() {
   // Fix debug_values whose defs have been stackified.
   if (!WasmDisableExplicitLocals)
     addPass(createWebAssemblyDebugFixup());
+
+  // TODO flag waka
+  addPass(createWebAssemblyBranchHinting());
 
   // Collect information to prepare for MC lowering / asm printing.
   addPass(createWebAssemblyMCLowerPrePass());
