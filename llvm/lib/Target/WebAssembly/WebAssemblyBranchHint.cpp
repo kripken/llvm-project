@@ -1,4 +1,4 @@
-//===-- WebAssemblyOptimizeReturned.cpp - Optimize "returned" attributes --===//
+//===-- WebAssemblyBranchHint.cpp - Generate branch hints from LLVM IR   --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,24 +7,27 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Optimize calls with "returned" attributes for WebAssembly.
+/// Convert LLVM IR branch_weights
+/// (https://llvm.org/docs/LangRef.html#branch-weights) into metadata that will
+/// then be emitted as a wasm custom section for branch hints
+/// (https://github.com/WebAssembly/branch-hinting).
 ///
 //===----------------------------------------------------------------------===//
 
 #include "WebAssembly.h"
-#include "llvm/IR/Dominators.h"
+#include "llvm/IR/Dominators.h" // ?
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-#define DEBUG_TYPE "wasm-optimize-returned"
+#define DEBUG_TYPE "wasm-branch-hint"
 
 namespace {
-class OptimizeReturned final : public FunctionPass,
-                               public InstVisitor<OptimizeReturned> {
+class BranchHint final : public FunctionPass,
+                               public InstVisitor<BranchHint> {
   StringRef getPassName() const override {
-    return "WebAssembly Optimize Returned";
+    return "WebAssembly Branch Hint";
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -40,22 +43,22 @@ class OptimizeReturned final : public FunctionPass,
 
 public:
   static char ID;
-  OptimizeReturned() : FunctionPass(ID) {}
+  BranchHint() : FunctionPass(ID) {}
 
   void visitCallBase(CallBase &CB);
 };
 } // End anonymous namespace
 
-char OptimizeReturned::ID = 0;
-INITIALIZE_PASS(OptimizeReturned, DEBUG_TYPE,
-                "Optimize calls with \"returned\" attributes for WebAssembly",
+char BranchHint::ID = 0;
+INITIALIZE_PASS(BranchHint, DEBUG_TYPE,
+                "Emit WebAssembly branch hints",
                 false, false)
 
-FunctionPass *llvm::createWebAssemblyOptimizeReturned() {
-  return new OptimizeReturned();
+FunctionPass *llvm::createWebAssemblyBranchHint() {
+  return new BranchHint();
 }
 
-void OptimizeReturned::visitCallBase(CallBase &CB) {
+void BranchHint::visitCallBase(CallBase &CB) {
   for (unsigned I = 0, E = CB.arg_size(); I < E; ++I)
     if (CB.paramHasAttr(I, Attribute::Returned)) {
       Value *Arg = CB.getArgOperand(I);
@@ -68,8 +71,8 @@ void OptimizeReturned::visitCallBase(CallBase &CB) {
     }
 }
 
-bool OptimizeReturned::runOnFunction(Function &F) {
-  LLVM_DEBUG(dbgs() << "********** Optimize returned Attributes **********\n"
+bool BranchHint::runOnFunction(Function &F) {
+  LLVM_DEBUG(dbgs() << "********** Emit wasm branch hints **********\n"
                        "********** Function: "
                     << F.getName() << '\n');
 
