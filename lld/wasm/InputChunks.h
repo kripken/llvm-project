@@ -249,7 +249,7 @@ protected:
   std::vector<MergeInputChunk *> chunks;
 };
 
-// Represents a single wasm function within and input file.  These are
+// Represents a single wasm function within an input file.  These are
 // combined to create the final output CODE section.
 class InputFunction : public InputChunk {
 public:

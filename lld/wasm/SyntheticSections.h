@@ -501,7 +501,7 @@ protected:
 
   std::vector<FuncHints> funcHintsVec;
 
-  ArrayRef<OutputSegment *> segments;
+  ArrayRef<OutputSegment *> segments; // XXX
 };
 
 // Linker generated output sections

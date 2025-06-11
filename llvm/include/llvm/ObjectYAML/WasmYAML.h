@@ -247,6 +247,29 @@ struct NameSection : CustomSection {
   std::vector<NameEntry> DataSegmentNames;
 };
 
+// A hint for an instruction.
+struct HintEntry {
+  // TODO expr loc
+  bool likely;
+};
+
+// All the hints in a function.
+struct FuncHintEntry {
+  StringRef funcName;
+  std::vector<Hint> hints;
+};
+
+struct BranchHintSection : CustomSection {
+  BranchHintSection() : CustomSection("metadata.code.branch_hint") {}
+
+  static bool classof(const Section *S) {
+    auto C = dyn_cast<CustomSection>(S);
+    return C && C->Name == "metadata.code.branch_hint";
+  }
+
+  std::vector<FuncHintEntry> FunctionHints;
+};
+
 struct LinkingSection : CustomSection {
   LinkingSection() : CustomSection("linking") {}
 
