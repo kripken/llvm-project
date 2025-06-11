@@ -499,7 +499,7 @@ void WebAssemblyPassConfig::addIRPasses() {
   addPass(createIndirectBrExpandPass());
 
   // TODO flag
-  addPass(createWebAssemblyBranchHint());
+  addPass(createWebAssemblyBranchHinting());
 
   TargetPassConfig::addIRPasses();
 }

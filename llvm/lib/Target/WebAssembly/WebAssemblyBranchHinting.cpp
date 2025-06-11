@@ -1,4 +1,4 @@
-//===-- WebAssemblyBranchHint.cpp - Generate branch hints from LLVM IR   --===//
+//===-- WebAssemblyBranchHinting.cpp - Emit branch hints from LLVM IR    --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -24,8 +24,8 @@ using namespace llvm;
 #define DEBUG_TYPE "wasm-branch-hint"
 
 namespace {
-class BranchHint final : public FunctionPass,
-                               public InstVisitor<BranchHint> {
+class BranchHinting final : public FunctionPass,
+                               public InstVisitor<BranchHinting> {
   StringRef getPassName() const override {
     return "WebAssembly Branch Hint";
   }
@@ -43,22 +43,22 @@ class BranchHint final : public FunctionPass,
 
 public:
   static char ID;
-  BranchHint() : FunctionPass(ID) {}
+  BranchHinting() : FunctionPass(ID) {}
 
   void visitCallBase(CallBase &CB);
 };
 } // End anonymous namespace
 
-char BranchHint::ID = 0;
-INITIALIZE_PASS(BranchHint, DEBUG_TYPE,
+char BranchHinting::ID = 0;
+INITIALIZE_PASS(BranchHinting, DEBUG_TYPE,
                 "Emit WebAssembly branch hints",
                 false, false)
 
-FunctionPass *llvm::createWebAssemblyBranchHint() {
-  return new BranchHint();
+FunctionPass *llvm::createWebAssemblyBranchHinting() {
+  return new BranchHinting();
 }
 
-void BranchHint::visitCallBase(CallBase &CB) {
+void BranchHinting::visitCallBase(CallBase &CB) {
   for (unsigned I = 0, E = CB.arg_size(); I < E; ++I)
     if (CB.paramHasAttr(I, Attribute::Returned)) {
       Value *Arg = CB.getArgOperand(I);
@@ -71,7 +71,7 @@ void BranchHint::visitCallBase(CallBase &CB) {
     }
 }
 
-bool BranchHint::runOnFunction(Function &F) {
+bool BranchHinting::runOnFunction(Function &F) {
   LLVM_DEBUG(dbgs() << "********** Emit wasm branch hints **********\n"
                        "********** Function: "
                     << F.getName() << '\n');
