@@ -58,6 +58,46 @@ FunctionPass *llvm::createWebAssemblyBranchHinting() {
 }
 
 void WebAssemblyBranchHinting::visitBranchInst(BranchInst &I) {
+  // Check for profiling metadata of the right size and contents (beginning with
+  // "branch_weights").
+  MDNode *ProfMD = I.getMetadata(LLVMContext::MD_prof);
+  if (!ProfMD)
+    return;
+  if (ProfMD->getNumOperands() == 0)
+    return;
+  MDString *MDName = dyn_cast<MDString>(ProfMD->getOperand(0));
+  if (!MDName || MDName->getString() != "branch_weights")
+    return;
+
+  // We expect two integers, for the true and false weights.
+  if (ProfMD->getNumOperands() < 3)
+    return;
+
+  // Operand indices for weights, assuming no "expected" operand appears before
+  // them (which we ignore).
+  unsigned TrueWeightOp = 1;
+  unsigned FalseWeightOp = 2;
+
+  // Skip "expected", if present.
+  if (isa<MDString>(ProfMD->getOperand(1))) {
+    if (ProfMD->getNumOperands() < 4)
+      return;
+    ++TrueWeightOp;
+    ++FalseWeightOp;
+  }
+
+  ConstantInt *TrueWeight =
+    mdconst::extract<ConstantInt>(ProfMD->getOperand(TrueWeightOp));
+  ConstantInt *FalseWeight =
+    mdconst::extract<ConstantInt>(ProfMD->getOperand(FalseWeightOp));
+
+  if (!TrueWeight || !FalseWeight)
+    return;
+
+  std::cout << "waka " << TrueWeight->getZExtValue() << " : " << FalseWeight->getZExtValue() << '\n';
+
+  // Generate metadata for wasm.
+  // TODO
 }
 
 bool WebAssemblyBranchHinting::runOnFunction(Function &F) {
