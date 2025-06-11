@@ -24,8 +24,8 @@ using namespace llvm;
 #define DEBUG_TYPE "wasm-branch-hint"
 
 namespace {
-class BranchHinting final : public FunctionPass,
-                               public InstVisitor<BranchHinting> {
+class WebAssemblyBranchHinting final : public FunctionPass,
+                               public InstVisitor<WebAssemblyBranchHinting> {
   StringRef getPassName() const override {
     return "WebAssembly Branch Hint";
   }
@@ -43,22 +43,22 @@ class BranchHinting final : public FunctionPass,
 
 public:
   static char ID;
-  BranchHinting() : FunctionPass(ID) {}
+  WebAssemblyBranchHinting() : FunctionPass(ID) {}
 
   void visitCallBase(CallBase &CB);
 };
 } // End anonymous namespace
 
-char BranchHinting::ID = 0;
-INITIALIZE_PASS(BranchHinting, DEBUG_TYPE,
+char WebAssemblyBranchHinting::ID = 0;
+INITIALIZE_PASS(WebAssemblyBranchHinting, DEBUG_TYPE,
                 "Emit WebAssembly branch hints",
                 false, false)
 
 FunctionPass *llvm::createWebAssemblyBranchHinting() {
-  return new BranchHinting();
+  return new WebAssemblyBranchHinting();
 }
 
-void BranchHinting::visitCallBase(CallBase &CB) {
+void WebAssemblyBranchHinting::visitCallBase(CallBase &CB) {
   for (unsigned I = 0, E = CB.arg_size(); I < E; ++I)
     if (CB.paramHasAttr(I, Attribute::Returned)) {
       Value *Arg = CB.getArgOperand(I);
@@ -71,7 +71,7 @@ void BranchHinting::visitCallBase(CallBase &CB) {
     }
 }
 
-bool BranchHinting::runOnFunction(Function &F) {
+bool WebAssemblyBranchHinting::runOnFunction(Function &F) {
   LLVM_DEBUG(dbgs() << "********** Emit wasm branch hints **********\n"
                        "********** Function: "
                     << F.getName() << '\n');
