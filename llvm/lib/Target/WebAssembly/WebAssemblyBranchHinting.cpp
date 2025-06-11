@@ -43,7 +43,7 @@ using namespace llvm;
 namespace {
 class WebAssemblyBranchHinting final : public MachineFunctionPass {
   StringRef getPassName() const override {
-    return "WebAssembly Lower br_unless";
+    return "WebAssembly emit branch hints";
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
