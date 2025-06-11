@@ -15,10 +15,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "WebAssembly.h"
-#include "llvm/IR/Dominators.h" // ?
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+//?
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Metadata.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
+
+
 using namespace llvm;
 
 #define DEBUG_TYPE "wasm-branch-hint"
@@ -30,22 +38,13 @@ class WebAssemblyBranchHinting final : public FunctionPass,
     return "WebAssembly Branch Hint";
   }
 
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
-    AU.addRequired<DominatorTreeWrapperPass>();
-    AU.addPreserved<DominatorTreeWrapperPass>();
-    FunctionPass::getAnalysisUsage(AU);
-  }
-
   bool runOnFunction(Function &F) override;
-
-  DominatorTree *DT = nullptr;
 
 public:
   static char ID;
   WebAssemblyBranchHinting() : FunctionPass(ID) {}
 
-  void visitCallBase(CallBase &CB);
+  void visitBranchInst(BranchInst &I);
 };
 } // End anonymous namespace
 
@@ -58,17 +57,7 @@ FunctionPass *llvm::createWebAssemblyBranchHinting() {
   return new WebAssemblyBranchHinting();
 }
 
-void WebAssemblyBranchHinting::visitCallBase(CallBase &CB) {
-  for (unsigned I = 0, E = CB.arg_size(); I < E; ++I)
-    if (CB.paramHasAttr(I, Attribute::Returned)) {
-      Value *Arg = CB.getArgOperand(I);
-      // Ignore constants, globals, undef, etc.
-      if (isa<Constant>(Arg))
-        continue;
-      // Like replaceDominatedUsesWith but using Instruction/Use dominance.
-      Arg->replaceUsesWithIf(&CB,
-                             [&](Use &U) { return DT->dominates(&CB, U); });
-    }
+void WebAssemblyBranchHinting::visitBranchInst(BranchInst &I) {
 }
 
 bool WebAssemblyBranchHinting::runOnFunction(Function &F) {
@@ -76,7 +65,6 @@ bool WebAssemblyBranchHinting::runOnFunction(Function &F) {
                        "********** Function: "
                     << F.getName() << '\n');
 
-  DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   visit(F);
   return true;
 }
