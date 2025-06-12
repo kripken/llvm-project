@@ -648,26 +648,34 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
       &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
 
   size_t NumHints = 0;
-  
+
+  // See if there is a branch hint for an instruction, and if so, if it is true
+  // or false.
+  auto getBranchHint = [&](MachineInstr& MI) -> std::optional<bool> {
+    if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
+        MI.getOpcode() != WebAssembly::BR_IF)
+      return {};
+
+    // This is a BR. It has two successors, and perhaps branch probability
+    // info between them.
+    errs() << MI << '\n';
+    auto* MBB = MI.getParent();
+    assert(MBB->succ_size() == 2);
+    auto iter = MBB->succ_begin();
+    MachineBasicBlock* first = *iter;
+    iter++;
+    MachineBasicBlock* second = *iter;
+
+    BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
+    BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
+    if (probFirst == probSecond)
+      return {};
+    return probFirst > probSecond;
+  };
+
   for (auto &MBB : *MF) {
     for (MachineInstr &MI : MBB) {
-      if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
-          MI.getOpcode() != WebAssembly::BR_IF)
-        continue;
-
-      // This is a BR. It has two successors, and perhaps branch probability
-      // info between them.
-      errs() << MI << '\n';
-      assert(MBB.succ_size() == 2);
-      auto iter = MBB.succ_begin();
-      MachineBasicBlock* first = *iter;
-      iter++;
-      MachineBasicBlock* second = *iter;
-
-      BranchProbability probFirst = MBPI->getEdgeProbability(&MBB, first);
-      BranchProbability probSecond = MBPI->getEdgeProbability(&MBB, second);
-      errs() << probFirst << " : " << probSecond << '\n';
-      if (probFirst != probSecond) {
+      if (getBranchHint(MI)) {
         ++NumHints;
       }
     }
@@ -676,11 +684,14 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
   if (NumHints) {
     // Emit hints for this function.
     // XXX One section for all functions, support multiple functions, for now just one
-    MCSectionWasm *CustomSection = OutContext.getWasmSection(
-        ".custom_section.metadata.code.branch_hint",
-        SectionKind::getMetadata());
+    if (!BranchHintSection) {
+      BranchHintSection = OutContext.getWasmSection(
+          ".custom_section.metadata.code.branch_hint",
+          SectionKind::getMetadata());
+    }
+
     OutStreamer->pushSection();
-    OutStreamer->switchSection(CustomSection);
+    OutStreamer->switchSection(BranchHintSection);
 
     // One function for now FIXME
     OutStreamer->emitULEB128IntValue(1);
@@ -688,10 +699,34 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
     // The function index.
     OutStreamer->emitValue(
         MCSymbolRefExpr::create(getSymbol(&F), WebAssembly::S_FUNCINDEX, OutContext),
-        1); // XXX We need an LEB here! But I see no method to emit a symbol as LEB...
+        1); // XXX We need an LEB here! But I see no method to emit a symbol as LEB... do we emit 4 and let the linker fix that up?
 
     // The number of hints in the function.
-    OutStreamer->emitULEB128IntValue(0); // FIXME
+    OutStreamer->emitULEB128IntValue(NumHints);
+
+    // The hints.
+    for (auto &MBB : *MF) {
+      for (MachineInstr &MI : MBB) {
+        if (auto Hint = getBranchHint(MI)) {
+          // Create a temp symbol for this instruction, so we can refer to it,
+          // then emit the instruction's offset in the function using that.
+          MCSymbol *InstructionSymbol = OutContext.createTempSymbol();
+          OutStreamer->emitLabel(InstructionSymbol);
+          const MCSymbolRefExpr *InstRef =
+            MCSymbolRefExpr::create(InstructionSymbol, OutContext);
+          const MCSymbolRefExpr *FuncRef =
+              MCSymbolRefExpr::create(getSymbol(&F), OutContext);
+          const MCBinaryExpr *DiffExpr =
+              MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
+          OutStreamer->emitValue(DiffExpr, 4); // Linker will patch up to LEB?
+
+          // Hints are of size 1.
+          OutStreamer->emitULEB128IntValue(1);
+          // The hint itself, likely or not.
+          OutStreamer->emitULEB128IntValue(*Hint);
+        }
+      }
+    }
 
     OutStreamer->popSection();
   }

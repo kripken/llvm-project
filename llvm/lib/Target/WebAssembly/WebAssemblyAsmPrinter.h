@@ -27,6 +27,7 @@ private:
   const MachineRegisterInfo *MRI;
   WebAssemblyFunctionInfo *MFI;
   bool signaturesEmitted = false;
+  MCSectionWasm *BranchHintSection = nullptr;
 
 public:
   explicit WebAssemblyAsmPrinter(TargetMachine &TM,
