@@ -73,6 +73,8 @@ bool WebAssemblyBranchHinting::runOnMachineFunction(MachineFunction &MF) {
                        "********** Function: "
                     << MF.getName() << '\n');
 
+  errs() << "Pass\n";
+
   const MachineBranchProbabilityInfo *MBPI =
       &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
 
@@ -100,6 +102,8 @@ bool WebAssemblyBranchHinting::runOnMachineFunction(MachineFunction &MF) {
       errs() << probFirst << " : " << probSecond << '\n';
     }
   }
+
+  errs() << "and Pass\n";
 
   return true;
 }

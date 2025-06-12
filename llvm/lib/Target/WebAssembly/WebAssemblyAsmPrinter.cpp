@@ -32,6 +32,7 @@
 #include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
@@ -635,6 +636,67 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
   getTargetStreamer()->emitLocal(Locals);
 
   AsmPrinter::emitFunctionBodyStart();
+
+  // Consider branch probability info from the MachineFunction. We must scan all
+  // instructions now so that we can emit the header part of the custom section
+  // for branch hinting, which contains the function index and also the number
+  // of hints in the function.
+
+  errs() << "asmPrint\n"; // waka
+
+  const MachineBranchProbabilityInfo *MBPI =
+      &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
+
+  size_t NumHints = 0;
+  
+  for (auto &MBB : *MF) {
+    for (MachineInstr &MI : MBB) {
+      if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
+          MI.getOpcode() != WebAssembly::BR_IF)
+        continue;
+
+      // This is a BR. It has two successors, and perhaps branch probability
+      // info between them.
+      errs() << MI << '\n';
+      assert(MBB.succ_size() == 2);
+      auto iter = MBB.succ_begin();
+      MachineBasicBlock* first = *iter;
+      iter++;
+      MachineBasicBlock* second = *iter;
+
+      BranchProbability probFirst = MBPI->getEdgeProbability(&MBB, first);
+      BranchProbability probSecond = MBPI->getEdgeProbability(&MBB, second);
+      errs() << probFirst << " : " << probSecond << '\n';
+      if (probFirst != probSecond) {
+        ++NumHints;
+      }
+    }
+  }
+
+  if (NumHints) {
+    // Emit hints for this function.
+    // XXX One section for all functions, support multiple functions, for now just one
+    MCSectionWasm *CustomSection = OutContext.getWasmSection(
+        ".custom_section.metadata.code.branch_hint",
+        SectionKind::getMetadata());
+    OutStreamer->pushSection();
+    OutStreamer->switchSection(CustomSection);
+
+    // One function for now FIXME
+    OutStreamer->emitULEB128IntValue(1);
+
+    // The function index.
+    OutStreamer->emitValue(
+        MCSymbolRefExpr::create(getSymbol(&F), WebAssembly::S_FUNCINDEX, OutContext),
+        1); // XXX We need an LEB here! But I see no method to emit a symbol as LEB...
+
+    // The number of hints in the function.
+    OutStreamer->emitULEB128IntValue(0); // FIXME
+
+    OutStreamer->popSection();
+  }
+
+  errs() << "end asmPrint\n";
 }
 
 void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
