@@ -618,9 +618,8 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
   for (auto& FuncHints : AllFuncBranchHints) {
     auto* FuncSymbol = getSymbol(FuncHints.F);
     // The function index.
-    OutStreamer->emitValue(
-      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext),
-      4); // XXX We need an LEB here! But I see no method to emit a symbol as LEB... do we emit 4 and let the linker fix that up?
+    OutStreamer->emitULEB128Value(
+      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext));
 
     // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
@@ -632,7 +631,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
           MCSymbolRefExpr::create(FuncSymbol, OutContext);
       const MCBinaryExpr *DiffExpr =
           MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-      OutStreamer->emitValue(DiffExpr, 4); // TODO 4 and linker will patch up to LEB?
+      OutStreamer->emitULEB128Value(DiffExpr);
 
       // Hints are of size 1.
       OutStreamer->emitULEB128IntValue(1);
@@ -671,6 +670,7 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   const MachineBranchProbabilityInfo *MBPI =
       &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
 
+  // XXX this is wrong, see b.txt
   BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
   BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
   if (probFirst == probSecond)
