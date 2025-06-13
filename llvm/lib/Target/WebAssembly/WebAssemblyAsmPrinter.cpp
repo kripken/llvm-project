@@ -661,7 +661,6 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
 
   // This is a BR. It has two successors, and perhaps branch probability
   // info between them.
-  errs() << MI << '\n';
   auto* MBB = MI.getParent();
   assert(MBB->succ_size() == 2);
   auto iter = MBB->succ_begin();
