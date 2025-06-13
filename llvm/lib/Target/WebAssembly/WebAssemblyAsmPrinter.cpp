@@ -617,9 +617,9 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
 
   for (auto& FuncHints : AllFuncBranchHints) {
     auto* FuncSymbol = getSymbol(FuncHints.F);
-    // The function index.
-    OutStreamer->emitULEB128Value(
-      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext));
+    // The function index. TODO LEB
+    OutStreamer->emitValue(
+      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext), 4);
 
     // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
@@ -631,7 +631,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
           MCSymbolRefExpr::create(FuncSymbol, OutContext);
       const MCBinaryExpr *DiffExpr =
           MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-      OutStreamer->emitULEB128Value(DiffExpr);
+      OutStreamer->emitValue(DiffExpr, 4); // TODO LEB
 
       // Hints are of size 1.
       OutStreamer->emitULEB128IntValue(1);
