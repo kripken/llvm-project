@@ -37,7 +37,7 @@ private:
   };
 
   struct FuncBranchHints {
-    MachineFunction *MF;
+    Function *F;
     std::vector<BranchHint> Hints;
   };
 

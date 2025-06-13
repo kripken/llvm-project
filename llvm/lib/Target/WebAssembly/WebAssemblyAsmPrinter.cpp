@@ -616,7 +616,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
   OutStreamer->emitULEB128IntValue(AllFuncBranchHints.size());
 
   for (auto& FuncHints : AllFuncBranchHints) {
-    auto* FuncSymbol = getSymbol(&FuncHints.MF->getFunction());
+    auto* FuncSymbol = getSymbol(FuncHints.F);
     // The function index.
     OutStreamer->emitValue(
       MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext),
@@ -718,8 +718,9 @@ void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
     OutStreamer->emitLabel(InstructionSymbol);
 
     // Stash the hint for later, on the proper function.
-    if (AllFuncBranchHints.empty() || AllFuncBranchHints.back().MF != MF) {
-      AllFuncBranchHints.emplace_back(FuncBranchHints{MF, {}});
+    Function *F = &MF->getFunction();
+    if (AllFuncBranchHints.empty() || AllFuncBranchHints.back().F != F) {
+      AllFuncBranchHints.emplace_back(FuncBranchHints{F, {}});
     }
     AllFuncBranchHints.back().Hints.emplace_back(BranchHint{InstructionSymbol, *Hint});
   }
