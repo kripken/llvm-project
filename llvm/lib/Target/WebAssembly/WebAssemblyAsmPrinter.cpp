@@ -610,6 +610,31 @@ void WebAssemblyAsmPrinter::emitJumpTableInfo() {
   // Nothing to do; jump tables are incorporated into the instruction stream.
 }
 
+std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI) {
+  if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
+      MI.getOpcode() != WebAssembly::BR_IF)
+    return {};
+
+  // This is a BR. It has two successors, and perhaps branch probability
+  // info between them.
+  errs() << MI << '\n';
+  auto* MBB = MI.getParent();
+  assert(MBB->succ_size() == 2);
+  auto iter = MBB->succ_begin();
+  MachineBasicBlock* first = *iter;
+  iter++;
+  MachineBasicBlock* second = *iter;
+
+  const MachineBranchProbabilityInfo *MBPI =
+      &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
+
+  BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
+  BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
+  if (probFirst == probSecond)
+    return {};
+  return probFirst > probSecond;
+}
+
 void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
   const Function &F = MF->getFunction();
   SmallVector<MVT, 1> ResultVTs;
@@ -644,34 +669,7 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
 
   errs() << "asmPrint\n"; // waka
 
-  const MachineBranchProbabilityInfo *MBPI =
-      &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
-
   size_t NumHints = 0;
-
-  // See if there is a branch hint for an instruction, and if so, if it is true
-  // or false.
-  auto getBranchHint = [&](MachineInstr& MI) -> std::optional<bool> {
-    if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
-        MI.getOpcode() != WebAssembly::BR_IF)
-      return {};
-
-    // This is a BR. It has two successors, and perhaps branch probability
-    // info between them.
-    errs() << MI << '\n';
-    auto* MBB = MI.getParent();
-    assert(MBB->succ_size() == 2);
-    auto iter = MBB->succ_begin();
-    MachineBasicBlock* first = *iter;
-    iter++;
-    MachineBasicBlock* second = *iter;
-
-    BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
-    BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
-    if (probFirst == probSecond)
-      return {};
-    return probFirst > probSecond;
-  };
 
   for (auto &MBB : *MF) {
     for (MachineInstr &MI : MBB) {
@@ -704,30 +702,6 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
     // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(NumHints);
 
-    // The hints.
-    for (auto &MBB : *MF) {
-      for (MachineInstr &MI : MBB) {
-        if (auto Hint = getBranchHint(MI)) {
-          // Create a temp symbol for this instruction, so we can refer to it,
-          // then emit the instruction's offset in the function using that.
-          MCSymbol *InstructionSymbol = OutContext.createTempSymbol();
-          OutStreamer->emitLabel(InstructionSymbol);
-          const MCSymbolRefExpr *InstRef =
-            MCSymbolRefExpr::create(InstructionSymbol, OutContext);
-          const MCSymbolRefExpr *FuncRef =
-              MCSymbolRefExpr::create(getSymbol(&F), OutContext);
-          const MCBinaryExpr *DiffExpr =
-              MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-          OutStreamer->emitValue(DiffExpr, 4); // Linker will patch up to LEB?
-
-          // Hints are of size 1.
-          OutStreamer->emitULEB128IntValue(1);
-          // The hint itself, likely or not.
-          OutStreamer->emitULEB128IntValue(*Hint);
-        }
-      }
-    }
-
     OutStreamer->popSection();
   }
 
@@ -738,6 +712,29 @@ void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
   LLVM_DEBUG(dbgs() << "EmitInstruction: " << *MI << '\n');
   WebAssembly_MC::verifyInstructionPredicates(MI->getOpcode(),
                                               Subtarget->getFeatureBits());
+
+  if (auto Hint = getBranchHint(*MI)) {
+    OutStreamer->pushSection();
+    assert(BranchHintSection);
+    OutStreamer->switchSection(BranchHintSection);
+    // Create a temp symbol for this instruction, so we can refer to it,
+    // then emit the instruction's offset in the function using that.
+    MCSymbol *InstructionSymbol = OutContext.createTempSymbol();
+    OutStreamer->emitLabel(InstructionSymbol);
+    const MCSymbolRefExpr *InstRef =
+      MCSymbolRefExpr::create(InstructionSymbol, OutContext);
+    const MCSymbolRefExpr *FuncRef =
+        MCSymbolRefExpr::create(getSymbol(&MF->getFunction()), OutContext);
+    const MCBinaryExpr *DiffExpr =
+        MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
+    OutStreamer->emitValue(DiffExpr, 4); // Linker will patch up to LEB?
+
+    // Hints are of size 1.
+    OutStreamer->emitULEB128IntValue(1);
+    // The hint itself, likely or not.
+    OutStreamer->emitULEB128IntValue(*Hint);
+    OutStreamer->popSection();
+  }
 
   switch (MI->getOpcode()) {
   case WebAssembly::ARGUMENT_i32:

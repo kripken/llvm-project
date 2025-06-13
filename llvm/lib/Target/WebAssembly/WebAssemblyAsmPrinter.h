@@ -79,6 +79,10 @@ public:
                                        bool &InvokeDetected);
   MCSymbol *getOrCreateWasmSymbol(StringRef Name);
   void emitDecls(const Module &M);
+
+  // See if there is a branch hint for an instruction, and if so, if it is true
+  // or false.
+  std::optional<bool> getBranchHint(const MachineInstr& MI);
 };
 
 } // end namespace llvm
