@@ -27,7 +27,21 @@ private:
   const MachineRegisterInfo *MRI;
   WebAssemblyFunctionInfo *MFI;
   bool signaturesEmitted = false;
-  MCSectionWasm *BranchHintSection = nullptr;
+
+  // A branch hint for an instruction. We gather them all (& by function) so we
+  // can emit the section at the end, knowing how many hints are present (which
+  // must be emitted before the hints, so we can't do it in a streaming manner).
+  struct BranchHint {
+    MCSymbol *Label;
+    bool IsLikely;
+  };
+
+  struct FuncBranchHints {
+    MachineFunction *MF;
+    std::vector<BranchHint> Hints;
+  };
+
+  std::vector<FuncBranchHints> AllFuncBranchHints;
 
 public:
   explicit WebAssemblyAsmPrinter(TargetMachine &TM,
@@ -60,6 +74,7 @@ public:
   void EmitProducerInfo(Module &M);
   void EmitTargetFeatures(Module &M);
   void EmitFunctionAttributes(Module &M);
+  void EmitBranchHints(Module &M);
   void emitSymbolType(const MCSymbolWasm *Sym);
   void emitGlobalVariable(const GlobalVariable *GV) override;
   void emitJumpTableInfo() override;

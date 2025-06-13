@@ -442,6 +442,7 @@ void WebAssemblyAsmPrinter::emitEndOfAsmFile(Module &M) {
   EmitProducerInfo(M);
   EmitTargetFeatures(M);
   EmitFunctionAttributes(M);
+  EmitBranchHints(M);
 }
 
 void WebAssemblyAsmPrinter::EmitProducerInfo(Module &M) {
@@ -600,6 +601,49 @@ void WebAssemblyAsmPrinter::EmitFunctionAttributes(Module &M) {
   }
 }
 
+void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
+  if (AllFuncBranchHints.empty())
+    return;
+
+  MCSectionWasm *BranchHintSection = OutContext.getWasmSection(
+    ".custom_section.metadata.code.branch_hint",
+    SectionKind::getMetadata());
+
+  OutStreamer->pushSection();
+  OutStreamer->switchSection(BranchHintSection);
+
+  // Number of functions with hints.
+  OutStreamer->emitULEB128IntValue(AllFuncBranchHints.size());
+
+  for (auto& FuncHints : AllFuncBranchHints) {
+    auto* FuncSymbol = getSymbol(&FuncHints.MF->getFunction());
+    // The function index.
+    OutStreamer->emitValue(
+      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext),
+      1); // XXX We need an LEB here! But I see no method to emit a symbol as LEB... do we emit 4 and let the linker fix that up?
+
+    // The number of hints in the function.
+    OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
+
+    for (auto& Hint : FuncHints.Hints) {
+      const MCSymbolRefExpr *InstRef =
+        MCSymbolRefExpr::create(Hint.Label, OutContext);
+      const MCSymbolRefExpr *FuncRef =
+          MCSymbolRefExpr::create(FuncSymbol, OutContext);
+      const MCBinaryExpr *DiffExpr =
+          MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
+      OutStreamer->emitValue(DiffExpr, 1); // TODO 4 and linker will patch up to LEB?
+
+      // Hints are of size 1.
+      OutStreamer->emitULEB128IntValue(1);
+      // The hint itself, likely or not.
+      OutStreamer->emitULEB128IntValue(Hint.IsLikely);
+    }
+  }
+
+  OutStreamer->popSection();
+}
+
 void WebAssemblyAsmPrinter::emitConstantPool() {
   emitDecls(*MMI->getModule());
   assert(MF->getConstantPool()->getConstants().empty() &&
@@ -662,79 +706,26 @@ void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
 
   AsmPrinter::emitFunctionBodyStart();
 
-  // Consider branch probability info from the MachineFunction. We must scan all
-  // instructions now so that we can emit the header part of the custom section
-  // for branch hinting, which contains the function index and also the number
-  // of hints in the function.
-
-  errs() << "asmPrint\n"; // waka
-
-  size_t NumHints = 0;
-
-  for (auto &MBB : *MF) {
-    for (MachineInstr &MI : MBB) {
-      if (getBranchHint(MI)) {
-        ++NumHints;
-      }
-    }
-  }
-
-  if (NumHints) {
-    // Emit hints for this function.
-    // XXX One section for all functions, support multiple functions, for now just one
-    if (!BranchHintSection) {
-      BranchHintSection = OutContext.getWasmSection(
-          ".custom_section.metadata.code.branch_hint",
-          SectionKind::getMetadata());
-    }
-
-    OutStreamer->pushSection();
-    OutStreamer->switchSection(BranchHintSection);
-
-    // One function for now FIXME
-    OutStreamer->emitULEB128IntValue(1);
-
-    // The function index.
-    OutStreamer->emitValue(
-        MCSymbolRefExpr::create(getSymbol(&F), WebAssembly::S_FUNCINDEX, OutContext),
-        1); // XXX We need an LEB here! But I see no method to emit a symbol as LEB... do we emit 4 and let the linker fix that up?
-
-    // The number of hints in the function.
-    OutStreamer->emitULEB128IntValue(NumHints);
-
-    OutStreamer->popSection();
-  }
-
-  errs() << "end asmPrint\n";
 }
 
 void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
   LLVM_DEBUG(dbgs() << "EmitInstruction: " << *MI << '\n');
-  WebAssembly_MC::verifyInstructionPredicates(MI->getOpcode(),
-                                              Subtarget->getFeatureBits());
 
   if (auto Hint = getBranchHint(*MI)) {
-    OutStreamer->pushSection();
-    assert(BranchHintSection);
-    OutStreamer->switchSection(BranchHintSection);
-    // Create a temp symbol for this instruction, so we can refer to it,
-    // then emit the instruction's offset in the function using that.
+    errs() << "emit branch hint for inst!\n";
+    // Create a temp symbol for this instruction, so we can refer to it.
     MCSymbol *InstructionSymbol = OutContext.createTempSymbol();
     OutStreamer->emitLabel(InstructionSymbol);
-    const MCSymbolRefExpr *InstRef =
-      MCSymbolRefExpr::create(InstructionSymbol, OutContext);
-    const MCSymbolRefExpr *FuncRef =
-        MCSymbolRefExpr::create(getSymbol(&MF->getFunction()), OutContext);
-    const MCBinaryExpr *DiffExpr =
-        MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-    OutStreamer->emitValue(DiffExpr, 4); // Linker will patch up to LEB?
 
-    // Hints are of size 1.
-    OutStreamer->emitULEB128IntValue(1);
-    // The hint itself, likely or not.
-    OutStreamer->emitULEB128IntValue(*Hint);
-    OutStreamer->popSection();
+    // Stash the hint for later, on the proper function.
+    if (AllFuncBranchHints.empty() || AllFuncBranchHints.back().MF != MF) {
+      AllFuncBranchHints.emplace_back(FuncBranchHints{MF, {}});
+    }
+    AllFuncBranchHints.back().Hints.emplace_back(BranchHint{InstructionSymbol, *Hint});
   }
+
+  WebAssembly_MC::verifyInstructionPredicates(MI->getOpcode(),
+                                              Subtarget->getFeatureBits());
 
   switch (MI->getOpcode()) {
   case WebAssembly::ARGUMENT_i32:
