@@ -94,6 +94,7 @@ private:
   void addSections();
 
   void createCustomSections();
+  void createBranchHintSection();
   void createSyntheticSections();
   void createSyntheticSectionsPostLayout();
   void finalizeSections();
@@ -164,7 +165,11 @@ void Writer::createCustomSections() {
   log("createCustomSections");
   for (auto &pair : customSectionMapping) {
     StringRef name = pair.first;
-    LLVM_DEBUG(dbgs() << "createCustomSection: " << name << "\n");
+
+    if (name == "metadata.code.branch_hint")
+      continue;
+
+    dbgs() << "createCustomSection: " << name << "\n";
 
     OutputSection *sec = make<CustomSection>(std::string(name), pair.second);
     if (ctx.arg.relocatable || ctx.arg.emitRelocs) {
@@ -174,6 +179,25 @@ void Writer::createCustomSections() {
     }
     addSection(sec);
   }
+}
+
+void Writer::createBranchHintSection() {
+  StringRef name = "metadata.code.branch_hint";
+  auto iter = customSectionMapping.find(name);
+  if (iter == customSectionMapping.end())
+    return;
+  auto& inputChunks = iter->second;
+
+  dbgs() << "createBranchHintSection: " << name << "\n";
+
+  OutputSection *sec = make<CustomSection>(std::string(name), inputChunks);
+  auto *sym = make<OutputSectionSymbol>(sec);
+  out.linkingSec->addToSymtab(sym);
+  sec->sectionSym = sym;
+  addSection(sec);
+
+  // Avoid processing it again in createCustomSections.
+  customSectionMapping.erase("branch_hint");
 }
 
 // Create relocations sections in the final output.
@@ -543,6 +567,7 @@ void Writer::addSections() {
   addSection(out.startSec);
   addSection(out.elemSec);
   addSection(out.dataCountSec);
+  createBranchHintSection();
 
   addSection(make<CodeSection>(out.functionSec->inputFunctions));
   addSection(make<DataSection>(segments));
