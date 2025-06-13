@@ -639,9 +639,6 @@ void WebAssemblyPassConfig::addPreEmitPass() {
   if (!WasmDisableExplicitLocals)
     addPass(createWebAssemblyDebugFixup());
 
-  // TODO flag waka
-  addPass(createWebAssemblyBranchHinting());
-
   // Collect information to prepare for MC lowering / asm printing.
   addPass(createWebAssemblyMCLowerPrePass());
 }

@@ -620,7 +620,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
     // The function index.
     OutStreamer->emitValue(
       MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext),
-      1); // XXX We need an LEB here! But I see no method to emit a symbol as LEB... do we emit 4 and let the linker fix that up?
+      4); // XXX We need an LEB here! But I see no method to emit a symbol as LEB... do we emit 4 and let the linker fix that up?
 
     // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
@@ -632,7 +632,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
           MCSymbolRefExpr::create(FuncSymbol, OutContext);
       const MCBinaryExpr *DiffExpr =
           MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-      OutStreamer->emitValue(DiffExpr, 1); // TODO 4 and linker will patch up to LEB?
+      OutStreamer->emitValue(DiffExpr, 4); // TODO 4 and linker will patch up to LEB?
 
       // Hints are of size 1.
       OutStreamer->emitULEB128IntValue(1);
