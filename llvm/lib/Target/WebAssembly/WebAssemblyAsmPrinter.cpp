@@ -13,11 +13,6 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "llvm/MC/MCObjectStreamer.h"
-#include "llvm/MC/MCFragment.h"
-#include "MCTargetDesc/WebAssemblyFixupKinds.h"
-#include "llvm/MC/MCWasmStreamer.h"
-
 #include "WebAssemblyAsmPrinter.h"
 #include "MCTargetDesc/WebAssemblyMCExpr.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
@@ -606,19 +601,13 @@ void WebAssemblyAsmPrinter::EmitFunctionAttributes(Module &M) {
   }
 }
 
-
 void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
   if (AllFuncBranchHints.empty())
     return;
 
-  // TODO: Check if safe! XXX
-  MCObjectStreamer *ObjStreamer = static_cast<MCWasmStreamer*>(OutStreamer.get());
-  if (!ObjStreamer)
-    return;
-
   MCSectionWasm *BranchHintSection = OutContext.getWasmSection(
-      ".custom_section.metadata.code.branch_hint",
-      SectionKind::getMetadata());
+    ".custom_section.metadata.code.branch_hint",
+    SectionKind::getMetadata());
 
   OutStreamer->pushSection();
   OutStreamer->switchSection(BranchHintSection);
@@ -626,47 +615,25 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
   // Number of functions with hints.
   OutStreamer->emitULEB128IntValue(AllFuncBranchHints.size());
 
-  const MCFixupKind FixupKind = MCFixupKind(WebAssembly::fixup_uleb128_i32);
-  const unsigned LEB128PadSize = 5;
-
   for (auto& FuncHints : AllFuncBranchHints) {
     auto* FuncSymbol = getSymbol(FuncHints.F);
+    // The function index. TODO LEB
+    OutStreamer->emitValue(
+      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext), 4);
 
-    // Manually emit the relocatable function index.
-    {
-      OutStreamer->emitULEB128IntValue(0x42); // waka debug
-      MCDataFragment *DF = ObjStreamer->getOrCreateDataFragment();
-      const MCSymbolRefExpr *FuncIndexExpr =
-          MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext);
-      uint64_t Offset = DF->getContents().size();
-      DF->getFixups().push_back(
-          MCFixup::create(Offset, FuncIndexExpr, FixupKind));
-      DF->getContents().append(LEB128PadSize, '\0');
-      OutStreamer->emitULEB128IntValue(0x43); // waka debug
-    }
-
+    // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
 
     for (auto& Hint : FuncHints.Hints) {
-      // Manually emit the relocatable instruction offset.
-      {
-        OutStreamer->emitULEB128IntValue(0x44); // waka debug
-        MCDataFragment *DF = ObjStreamer->getOrCreateDataFragment();
-        const MCSymbolRefExpr *InstRef =
-            MCSymbolRefExpr::create(Hint.Label, OutContext);
-        const MCSymbolRefExpr *FuncRef =
-            MCSymbolRefExpr::create(FuncSymbol, OutContext);
-        const MCBinaryExpr *DiffExpr =
-            MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
+      const MCSymbolRefExpr *InstRef =
+        MCSymbolRefExpr::create(Hint.Label, OutContext);
+      const MCSymbolRefExpr *FuncRef =
+          MCSymbolRefExpr::create(FuncSymbol, OutContext);
+      const MCBinaryExpr *DiffExpr =
+          MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
+      OutStreamer->emitValue(DiffExpr, 4); // TODO LEB
 
-        uint64_t Offset = DF->getContents().size();
-        DF->getFixups().push_back(
-            MCFixup::create(Offset, DiffExpr, FixupKind));
-        DF->getContents().append(LEB128PadSize, '\0');
-        OutStreamer->emitULEB128IntValue(0x45); // waka debug
-      }
-
-      // Hint size, always 1 for now.
+      // Hints are of size 1.
       OutStreamer->emitULEB128IntValue(1);
       // The hint itself, likely or not.
       OutStreamer->emitULEB128IntValue(Hint.IsLikely);
