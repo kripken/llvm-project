@@ -617,9 +617,14 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
 
   for (auto& FuncHints : AllFuncBranchHints) {
     auto* FuncSymbol = getSymbol(FuncHints.F);
-    // The function index. TODO LEB
-    OutStreamer->emitValue(
-      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_FUNCINDEX, OutContext), 4);
+    // The function index. We use S_None because WasmObjectWriter has
+    //   case WebAssembly::S_FUNCINDEX:
+    //    return wasm::R_WASM_FUNCTION_INDEX_I32;
+    // i.e. S_FUNCINDEX is always relocated as an I32, but we need an LEB. Using
+    // None gets us to pick the relocation based on the fixup, and
+    // MCObjectStreamer will emit a proper LEB fixup for emitULEB128Value.
+    OutStreamer->emitULEB128Value(
+      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_None, OutContext));
 
     // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
@@ -631,7 +636,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
           MCSymbolRefExpr::create(FuncSymbol, OutContext);
       const MCBinaryExpr *DiffExpr =
           MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-      OutStreamer->emitValue(DiffExpr, 4); // TODO LEB
+      OutStreamer->emitULEB128Value(DiffExpr);
 
       // Hints are of size 1.
       OutStreamer->emitULEB128IntValue(1);
