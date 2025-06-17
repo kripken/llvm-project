@@ -117,7 +117,9 @@ public:
                                  const MCExpr *Value) override;
   void emitValueImpl(const MCExpr *Value, unsigned Size,
                      SMLoc Loc = SMLoc()) override;
-  void emitULEB128Value(const MCExpr *Value) override;
+  void emitULEB128Value(const MCExpr *Value,
+                        unsigned PadTo = 0,
+                        std::optional<MCFixupKind> Fixup = {}) override;
   void emitSLEB128Value(const MCExpr *Value) override;
   void emitWeakReference(MCSymbol *Alias, const MCSymbol *Target) override;
   void changeSection(MCSection *Section, uint32_t Subsection = 0) override;

@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "WebAssemblyAsmPrinter.h"
+#include "MCTargetDesc/WebAssemblyFixupKinds.h"
 #include "MCTargetDesc/WebAssemblyMCExpr.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
 #include "MCTargetDesc/WebAssemblyTargetStreamer.h"
@@ -624,7 +625,9 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
     // None gets us to pick the relocation based on the fixup, and
     // MCObjectStreamer will emit a proper LEB fixup for emitULEB128Value.
     OutStreamer->emitULEB128Value(
-      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_None, OutContext));
+      MCSymbolRefExpr::create(FuncSymbol, WebAssembly::S_None, OutContext),
+      5,
+      MCFixupKind(WebAssembly::fixup_uleb128_i32));
 
     // The number of hints in the function.
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());

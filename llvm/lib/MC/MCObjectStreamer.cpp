@@ -6,9 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// waka XXX see below
-#include "../lib/Target/WebAssembly/MCTargetDesc/WebAssemblyFixupKinds.h"
-
 #include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -262,7 +259,9 @@ void MCObjectStreamer::emitLabelAtPos(MCSymbol *Symbol, SMLoc Loc,
   Symbol->setOffset(Offset);
 }
 
-void MCObjectStreamer::emitULEB128Value(const MCExpr *Value) {
+void MCObjectStreamer::emitULEB128Value(const MCExpr *Value,
+                                        unsigned PadTo,
+                                        std::optional<MCFixupKind> Fixup) {
   errs() << "emitULEB128\n";
   int64_t IntValue;
   // Avoid fixups when possible.
@@ -272,25 +271,19 @@ void MCObjectStreamer::emitULEB128Value(const MCExpr *Value) {
     return;
   }
 
-  // Old code:
-  // insert(getContext().allocFragment<MCLEBFragment>(*Value, false));
+  if (!PadTo || !Fixup) {
+    // Emit the Value as best we can without padding or the fixup.
+    insert(getContext().allocFragment<MCLEBFragment>(*Value, false));
+    return;
+  }
 
   errs() << "  relative\n";
 
-  // XXX waka the below should maybe be something like
-  //   std::optional<MCFixupKind> MaybeKind =
-  //     Assembler->getBackend().getFixupKind("fixup_uleb128_i32");
-  // rather than hardcode the value, but that does not work (always returns
-  // false). But also, we really just need to add parameters I guess, for the
-  // padded size and the fixup kind.
-  MCFixupKind FixupKind = MCFixupKind(WebAssembly::fixup_uleb128_i32);
-
-  unsigned PaddedSize = 5;
-
+  // Use the given padding and fixup.
   MCDataFragment *DF = getOrCreateDataFragment();
   DF->getFixups().push_back(MCFixup::create(
-      DF->getContents().size(), Value, FixupKind));
-  DF->appendContents(PaddedSize, 0);
+      DF->getContents().size(), Value, *Fixup));
+  DF->appendContents(PadTo, 0);
 }
 
 void MCObjectStreamer::emitSLEB128Value(const MCExpr *Value) {
