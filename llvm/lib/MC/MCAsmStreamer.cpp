@@ -257,8 +257,7 @@ public:
   void emitIntValueInHexWithPadding(uint64_t Value, unsigned Size) override;
 
   void emitULEB128Value(const MCExpr *Value,
-                        unsigned PadTo,
-                        std::optional<MCFixupKind> Fixup) override;
+                        unsigned PadTo) override;
 
   void emitSLEB128Value(const MCExpr *Value) override;
 
@@ -1405,8 +1404,7 @@ void MCAsmStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
 }
 
 void MCAsmStreamer::emitULEB128Value(const MCExpr *Value,
-                                     unsigned PadTo,
-                                     std::optional<MCFixupKind> Fixup) {
+                                     unsigned PadTo) {
   int64_t IntValue;
   if (Value->evaluateAsAbsolute(IntValue)) {
     emitULEB128IntValue(IntValue);

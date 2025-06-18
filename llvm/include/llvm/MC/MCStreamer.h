@@ -750,13 +750,8 @@ public:
     emitIntValue(Value, Size);
   }
 
-  /// The following parameters can be passed in when the Value is not
-  /// absolute:
-  /// \param PadTo - How many (zero) bytes of padding to emit.
-  /// \param Fixup - The fixup to apply in the linker.
   virtual void emitULEB128Value(const MCExpr *Value,
-                                unsigned PadTo = 0,
-                                std::optional<MCFixupKind> Fixup = {});
+                                unsigned PadTo = 0);
 
   virtual void emitSLEB128Value(const MCExpr *Value);
 

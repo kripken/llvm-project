@@ -260,8 +260,7 @@ void MCObjectStreamer::emitLabelAtPos(MCSymbol *Symbol, SMLoc Loc,
 }
 
 void MCObjectStreamer::emitULEB128Value(const MCExpr *Value,
-                                        unsigned PadTo,
-                                        std::optional<MCFixupKind> Fixup) {
+                                        unsigned PadTo) {
   errs() << "emitULEB128\n";
   int64_t IntValue;
   // Avoid fixups when possible.
@@ -271,7 +270,7 @@ void MCObjectStreamer::emitULEB128Value(const MCExpr *Value,
     return;
   }
 
-  if (!PadTo || !Fixup) {
+  if (!PadTo) {
     // Emit the Value as best we can without padding or the fixup.
     insert(getContext().allocFragment<MCLEBFragment>(*Value, false));
     return;
@@ -279,10 +278,14 @@ void MCObjectStreamer::emitULEB128Value(const MCExpr *Value,
 
   errs() << "  relative\n";
 
+  // Use the proper fixup from the specific assembler backend.
+  const MCAsmBackend &MAB = getAssembler().getBackend();
+  MCFixupKind Fixup = MAB.getULEB128Fixup(PadTo);
+
   // Use the given padding and fixup.
   MCDataFragment *DF = getOrCreateDataFragment();
   DF->getFixups().push_back(MCFixup::create(
-      DF->getContents().size(), Value, *Fixup));
+      DF->getContents().size(), Value, Fixup));
   DF->appendContents(PadTo, 0);
 }
 

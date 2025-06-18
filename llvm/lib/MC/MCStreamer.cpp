@@ -1324,8 +1324,7 @@ void MCStreamer::emitValueImpl(const MCExpr *Value, unsigned Size, SMLoc Loc) {
   visitUsedExpr(*Value);
 }
 void MCStreamer::emitULEB128Value(const MCExpr *Value,
-                                  unsigned PadTo,
-                                  std::optional<MCFixupKind> Fixup) {}
+                                  unsigned PadTo) {}
 void MCStreamer::emitSLEB128Value(const MCExpr *Value) {}
 void MCStreamer::emitFill(const MCExpr &NumBytes, uint64_t Value, SMLoc Loc) {}
 void MCStreamer::emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,

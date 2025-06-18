@@ -127,6 +127,11 @@ public:
                           const MCValue &Target, MutableArrayRef<char> Data,
                           uint64_t Value, bool IsResolved) = 0;
 
+  /// Given a ULEB128 of a particular padded size, return the fixup for it.
+  virtual MCFixupKind getULEB128Fixup(unsigned PadTo) const {
+    llvm_unreachable("Need to implement hook if target has ULEB128 fixups");
+  }
+
   /// @}
 
   /// \name Target Relaxation Interfaces

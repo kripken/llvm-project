@@ -46,6 +46,8 @@ public:
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override;
+
+  MCFixupKind getULEB128Fixup(unsigned PadTo) const override;
 };
 
 MCFixupKindInfo
@@ -76,6 +78,12 @@ bool WebAssemblyAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
     OS << char(WebAssembly::Nop);
 
   return true;
+}
+
+MCFixupKind WebAssemblyAsmBackend::getULEB128Fixup(unsigned PadTo) const {
+  // Only 32-bit is supported for now, which is padded to 5 bytes.
+  assert(PadTo == 5);
+  return MCFixupKind(WebAssembly::fixup_uleb128_i32);
 }
 
 void WebAssemblyAsmBackend::applyFixup(const MCFragment &, const MCFixup &Fixup,
