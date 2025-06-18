@@ -9,16 +9,22 @@ entry:
   br i1 %1, label %fail, label %success, !prof !0
 
 ; CHECK:	    .section	.custom_section.metadata.code.branch_hint,"",@
+
 ; Number of functions with hints.
 ; CHECK-NEXT:	.int8	1
+
 ; Function with the hint.
 ; CHECK-NEXT:	.uleb128 bw_bh_test
+
 ; Number of hints in function.
 ; CHECK-NEXT:	.int8	1
+
 ; Offset of the hint.
 ; CHECK-NEXT:	.uleb128 .Ltmp0-bw_bh_test
+
 ; Size of the hint.
 ; CHECK-NEXT:	.int8	1
+
 ; Value of the hint.
 ; CHECK-NEXT:	.int8	0
 
