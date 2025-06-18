@@ -1116,6 +1116,15 @@ public:
       return expect(AsmToken::EndOfStatement, "EOL");
     }
 
+    if (DirectiveID.getString() == ".uleb128_i32") {
+      const MCExpr *Val;
+      SMLoc End;
+      if (Parser.parseExpression(Val, End))
+        return error("Cannot parse .uleb128_i32 expression: ", Lexer.getTok());
+      Out.emitULEB128Value(Val, 5);
+      return expect(AsmToken::EndOfStatement, "EOL");
+    }
+
     if (DirectiveID.getString() == ".asciz") {
       if (checkDataSection())
         return ParseStatus::Failure;

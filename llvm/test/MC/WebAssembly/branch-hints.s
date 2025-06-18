@@ -27,7 +27,7 @@ bw_bh_test:                             # @bw_bh_test
 	.section	.text.bw_bh_test,"",@
 	.section	.custom_section.metadata.code.branch_hint,"",@
 	.int8	1
-	.uleb128 bw_bh_test
+	.uleb128_i32 bw_bh_test
 	.int8	1
 	.uleb128 .Ltmp0-bw_bh_test
 	.int8	1
@@ -35,4 +35,11 @@ bw_bh_test:                             # @bw_bh_test
 	.section	.text.bw_bh_test,"",@
 
 ## Test handling of ULEB128 fields in the branch hints section.
-## TODO checks
+# CHECK:       Name:            metadata.code.branch_hint
+# CHECK-NEXT:  Payload:         '01808080800001080100'
+#                                ^^ one function
+#                                  ^^^^^^^^^^ LEB of function index -
+#                                            ^^ one hint in function
+#                                              ^^ offset 8
+#                                                ^^ hint size 1
+#                                                  ^^ hint value: 0

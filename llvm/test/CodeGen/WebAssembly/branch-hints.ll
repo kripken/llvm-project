@@ -14,7 +14,7 @@ entry:
 ; CHECK-NEXT:	.int8	1
 
 ; Function with the hint.
-; CHECK-NEXT:	.uleb128 bw_bh_test
+; CHECK-NEXT:	.uleb128_int32 bw_bh_test
 
 ; Number of hints in function.
 ; CHECK-NEXT:	.int8	1

@@ -1410,7 +1410,14 @@ void MCAsmStreamer::emitULEB128Value(const MCExpr *Value,
     emitULEB128IntValue(IntValue);
     return;
   }
-  OS << "\t.uleb128 ";
+  if (!PadTo)
+    OS << "\t.uleb128 ";
+  else {
+    // A padding size has been specified. For now, all that is suppored is a 5-
+    // byte LEB, which is an int32.
+    assert(PadTo == 5);
+    OS << "\t.uleb128_int32 ";
+  }
   Value->print(OS, MAI);
   EmitEOL();
 }
