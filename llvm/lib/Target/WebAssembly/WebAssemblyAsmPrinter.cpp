@@ -680,9 +680,21 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   // XXX this is wrong, see b.txt
   BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
   BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
-  if (probFirst == probSecond)
-    return {};
-  return probFirst > probSecond;
+  errs() << "swaka " << probFirst << " vs " << probSecond << '\n';
+
+  // Wasm branch hints are boolean, and each one takes space in the binary, so
+  // we do not want to emit hints for trivial things like 55%/45%. Err on the
+  // side of caution for now and focus on really powerful hints (such as those
+  // given by __builtin_expect).
+  if (probFirst > probSecond * 100) {
+    errs() << "  emit true since " << probFirst << " > " << (probSecond * 100) << '\n';
+    return true;
+  }
+  if (probSecond > probFirst * 100) {
+    errs() << "  emit false since " << probSecond << " > " << (probFirst * 100) << '\n';
+    return false;
+  }
+  return {};
 }
 
 void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
@@ -718,7 +730,7 @@ void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
   LLVM_DEBUG(dbgs() << "EmitInstruction: " << *MI << '\n');
 
   if (auto Hint = getBranchHint(*MI)) {
-    errs() << "emit branch hint for inst!\n";
+    //errs() << "emit branch hint for inst!\n";
     // Create a temp symbol for this instruction, so we can refer to it.
     MCSymbol *InstructionSymbol = OutContext.createTempSymbol();
     OutStreamer->emitLabel(InstructionSymbol);

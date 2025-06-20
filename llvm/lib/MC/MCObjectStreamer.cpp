@@ -261,22 +261,20 @@ void MCObjectStreamer::emitLabelAtPos(MCSymbol *Symbol, SMLoc Loc,
 
 void MCObjectStreamer::emitULEB128Value(const MCExpr *Value,
                                         unsigned PadTo) {
-  errs() << "emitULEB128\n";
   int64_t IntValue;
   // Avoid fixups when possible.
   if (Value->evaluateAsAbsolute(IntValue, getAssemblerPtr())) {
-    errs() << "  absolute\n";
     emitULEB128IntValue(IntValue);
     return;
   }
 
   if (!PadTo) {
     // Emit the Value as best we can without padding or the fixup.
+    errs() << "waka waka\n";
+    abort();
     insert(getContext().allocFragment<MCLEBFragment>(*Value, false));
     return;
   }
-
-  errs() << "  relative\n";
 
   // Use the proper fixup from the specific assembler backend.
   const MCAsmBackend &MAB = getAssembler().getBackend();

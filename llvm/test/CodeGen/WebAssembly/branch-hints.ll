@@ -35,6 +35,6 @@ success:
   ret i32 0
 }
 
-!0 = !{!"branch_weights", i32 42, i32 1337}
+!0 = !{!"branch_weights", i32 1, i32 2000}
 
 ; TODO: a test that starts as asm, and checks either disassembly/objdump or YAML output. Something like llvm/test/MC/WebAssembly/debuginfo-relocs.s or the similar tests in there.

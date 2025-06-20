@@ -18,7 +18,7 @@ success:
   ret i32 0
 }
 
-!0 = !{!"branch_weights", i32 42, i32 1337}
+!0 = !{!"branch_weights", i32 1, i32 2000}
 
 ; CHECK:       - Type:            CUSTOM
 ; CHECK-NEXT:    Name:            metadata.code.branch_hint
