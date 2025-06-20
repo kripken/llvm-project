@@ -655,34 +655,58 @@ void WebAssemblyAsmPrinter::emitJumpTableInfo() {
 }
 
 std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI) {
-  if (MI.getOpcode() != WebAssembly::BR_UNLESS &&
-      MI.getOpcode() != WebAssembly::BR_IF)
+  // WebAssemblyLowerBrUnless should have run before us, removing all BR_UNLESS,
+  // which makes things simpler for us here.
+  assert(MI.getOpcode() != WebAssembly::BR_UNLESS);
+
+  if (MI.getOpcode() != WebAssembly::BR_IF)
     return {};
 
   // This is a BR. It has two successors, and perhaps branch probability
-  // info between them.
-  auto* MBB = MI.getParent();
-  assert(MBB->succ_size() == 2);
-  auto iter = MBB->succ_begin();
-  MachineBasicBlock* first = *iter;
+  // info between them. Finding the successor blocks is not trivial, since we
+  // run after CFGstackify, and even WebAssemblyInstrInfo::analyzeBranch returns
+  // that it cannot analyze branch targets. First, find the two successors of
+  // the parent block of this BR_IF.
+  auto *ParentMBB = MI.getParent();
+  assert(ParentMBB->succ_size() == 2);
+  auto iter = ParentMBB->succ_begin();
+  MachineBasicBlock* MBB1 = *iter;
   iter++;
-  MachineBasicBlock* second = *iter;
+  MachineBasicBlock* MBB2 = *iter;
+errs() << "  first : " << *MBB1 << '\n';
+errs() << "  second: " << *MBB2 << '\n';
 
+  // Iterate through the parent's basic blocks (linear time!) to find the
+  // block right after us, which is the fallthrough. If we branch, it is not to
+  // there.
+  auto ParentMBBI = ParentMBB->getIterator();
+  ++ParentMBBI;
+  // A block with a BR_IF must have something after it.
+  assert(ParentMBBI != MF->end());
+  auto *FalseDest = &*ParentMBBI;
+  MachineBasicBlock *TrueDest = FalseDest == MBB1 ? MBB2 : MBB1;
+  errs() << "MI: " << MI << '\n';
+  errs() << "False  : " << *FalseDest << '\n';
+  errs() << "TargetMBB: " << *TrueDest << '\n';
+
+
+for (int i = 0; i < MI.getNumOperands(); i++) errs() << "operand[" << i << ": " << MI.getOperand(i) << '\n';
+assert(TrueDest);
   const MachineBranchProbabilityInfo *MBPI =
       &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
 
-  // XXX this is wrong, see b.txt
-  BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
-  BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
-  errs() << "waka " << probFirst << " vs " << probSecond << '\n';
+  BranchProbability ProbTarget = MBPI->getEdgeProbability(ParentMBB, TrueDest);
+errs() << "BR_IF: " << MI << " with prob " << ProbTarget << '\n';
+
+errs() << "  to target " << *TrueDest << '\n';
+
+
   // Wasm branch hints are boolean, and each one takes space in the binary, so
   // we do not want to emit hints for trivial things like 55%/45%. Err on the
   // side of caution for now and focus on really powerful hints (such as those
   // given by __builtin_expect), and ignore hints of 100%/0% (code leading to an
   // unreachable; we emit an unreachable for them already, which is good enough
   // for both toolchains and VMs).
-  if (probFirst == probSecond)
-    return {};
   // We detect __builtin_expected-generated hints as follows. XXX horrible
   auto isFromExpected = [](BranchProbability Prob) {
     // Such hints appear as pairs of
@@ -690,9 +714,13 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
     return (Prob.getNumerator() == 0x00106035 || Prob.getNumerator() == 0x7fef9fcb) &&
            Prob.getDenominator() == 0x80000000;
   };
-  if (!isFromExpected(probFirst) || !isFromExpected(probSecond))
+  if (!isFromExpected(ProbTarget))
     return {};
-  return probFirst > probSecond;
+
+  const BranchProbability Half = BranchProbability(1, 2);
+  assert(ProbTarget != Half);
+errs() << "  emit " << (ProbTarget > Half) << '\n';
+  return ProbTarget > Half;
 }
 
 void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
