@@ -632,13 +632,7 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
     OutStreamer->emitULEB128IntValue(FuncHints.Hints.size());
 
     for (auto& Hint : FuncHints.Hints) {
-      const MCSymbolRefExpr *InstRef =
-        MCSymbolRefExpr::create(Hint.Label, OutContext);
-      const MCSymbolRefExpr *FuncRef =
-          MCSymbolRefExpr::create(FuncSymbol, OutContext);
-      const MCBinaryExpr *DiffExpr =
-          MCBinaryExpr::create(MCBinaryExpr::Sub, InstRef, FuncRef, OutContext);
-      OutStreamer->emitULEB128Value(DiffExpr);
+      OutStreamer->emitAbsoluteSymbolDiffAsULEB128(Hint.Label, FuncSymbol);
 
       // Hints are of size 1.
       OutStreamer->emitULEB128IntValue(1);
