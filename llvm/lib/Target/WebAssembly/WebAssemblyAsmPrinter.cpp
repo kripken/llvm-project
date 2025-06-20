@@ -687,7 +687,8 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   // given by __builtin_expect), and ignore hints of 100%/0% (code leading to an
   // unreachable; we emit an unreachable for them already, which is good enough
   // for both toolchains and VMs).
-  //
+  if (probFirst == probSecond)
+    return {};
   // We detect __builtin_expected-generated hints as follows. XXX horrible
   auto isFromExpected = [](BranchProbability Prob) {
     // Such hints appear as pairs of
@@ -695,7 +696,7 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
     return (Prob.getNumerator() == 0x00106035 || Prob.getNumerator() == 0x7fef9fcb) &&
            Prob.getDenominator() == 0x80000000;
   };
-  if (probFirst == probSecond)
+  if (!isFromExpected(probFirst) || !isFromExpected(probSecond))
     return {};
   return probFirst > probSecond;
 }
