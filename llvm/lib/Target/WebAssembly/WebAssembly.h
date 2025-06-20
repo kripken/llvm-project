@@ -31,6 +31,7 @@ ModulePass *createWebAssemblyFixFunctionBitcasts();
 FunctionPass *createWebAssemblyOptimizeReturned();
 FunctionPass *createWebAssemblyLowerRefTypesIntPtrConv();
 FunctionPass *createWebAssemblyRefTypeMem2Local();
+FunctionPass *createWebAssemblyBranchHinting();
 
 // ISel and immediate followup passes.
 FunctionPass *createWebAssemblyISelDag(WebAssemblyTargetMachine &TM,
@@ -88,6 +89,7 @@ void initializeWebAssemblyRegNumberingPass(PassRegistry &);
 void initializeWebAssemblyRegStackifyPass(PassRegistry &);
 void initializeWebAssemblyReplacePhysRegsPass(PassRegistry &);
 void initializeWebAssemblySetP2AlignOperandsPass(PassRegistry &);
+void initializeWebAssemblyBranchHintingPass(PassRegistry &);
 
 namespace WebAssembly {
 enum TargetIndex {

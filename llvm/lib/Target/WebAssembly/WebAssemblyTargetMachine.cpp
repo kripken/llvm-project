@@ -498,6 +498,9 @@ void WebAssemblyPassConfig::addIRPasses() {
   // Expand indirectbr instructions to switches.
   addPass(createIndirectBrExpandPass());
 
+  // TODO flag (here and elsewhere)
+  addPass(createWebAssemblyBranchHinting());
+  
   TargetPassConfig::addIRPasses();
 }
 

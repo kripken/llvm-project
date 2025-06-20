@@ -18,6 +18,7 @@ add_llvm_target(WebAssemblyCodeGen
   WebAssemblyAddMissingPrototypes.cpp
   WebAssemblyArgumentMove.cpp
   WebAssemblyAsmPrinter.cpp
+  WebAssemblyBranchHinting.cpp
   WebAssemblyCFGStackify.cpp
   WebAssemblyCleanCodeAfterTrap.cpp
   WebAssemblyCFGSort.cpp
