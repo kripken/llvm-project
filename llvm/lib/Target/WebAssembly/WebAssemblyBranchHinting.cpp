@@ -75,10 +75,12 @@ void WebAssemblyBranchHinting::visitBranchInst(BranchInst &I) {
     if (Node->getNumOperands() >= 2) {
       MDString *MDName = dyn_cast<MDString>(Node->getOperand(1));
       if (MDName && MDName->getString() == "expected")
+        errs() << "waka keeping: " << *Node << '\n';
         return false;
     }
 
     // Discard anything else.
+    errs() << "waka dumping: " << *Node << '\n';
     return true;
   });
 }

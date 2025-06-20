@@ -680,7 +680,21 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   // XXX this is wrong, see b.txt
   BranchProbability probFirst = MBPI->getEdgeProbability(MBB, first);
   BranchProbability probSecond = MBPI->getEdgeProbability(MBB, second);
-//errs() << "waka " << probFirst << " vs " << probSecond << '\n';
+  errs() << "waka " << probFirst << " vs " << probSecond << '\n';
+  // Wasm branch hints are boolean, and each one takes space in the binary, so
+  // we do not want to emit hints for trivial things like 55%/45%. Err on the
+  // side of caution for now and focus on really powerful hints (such as those
+  // given by __builtin_expect), and ignore hints of 100%/0% (code leading to an
+  // unreachable; we emit an unreachable for them already, which is good enough
+  // for both toolchains and VMs).
+  //
+  // We detect __builtin_expected-generated hints as follows. XXX horrible
+  auto isFromExpected = [](BranchProbability Prob) {
+    // Such hints appear as pairs of
+    //   0x00106035 / 0x80000000 = 0.05% , 0x7fef9fcb / 0x80000000 = 99.95%
+    return (Prob.getNumerator() == 0x00106035 || Prob.getNumerator() == 0x7fef9fcb) &&
+           Prob.getDenominator() == 0x80000000;
+  };
   if (probFirst == probSecond)
     return {};
   return probFirst > probSecond;
