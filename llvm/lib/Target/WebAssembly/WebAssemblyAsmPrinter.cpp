@@ -685,7 +685,11 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   // Wasm branch hints are boolean, and each one takes space in the binary, so
   // we do not want to emit hints for trivial things like 55%/45%. Err on the
   // side of caution for now and focus on really powerful hints (such as those
-  // given by __builtin_expect).
+  // given by __builtin_expect), and ignore hints of 100%/0% (code leading to an
+  // unreachable; we emit an unreachable for them already, which is good enough
+  // for both toolchains and VMs).
+  if (probFirst.isZero() || probSecond.isZero())
+    return {};
   if (probFirst > probSecond * 100) {
     errs() << "  emit true since " << probFirst << " > " << (probSecond * 100) << '\n';
     return true;

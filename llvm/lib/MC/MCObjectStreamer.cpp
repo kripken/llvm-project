@@ -269,9 +269,7 @@ void MCObjectStreamer::emitULEB128Value(const MCExpr *Value,
   }
 
   if (!PadTo) {
-    // Emit the Value as best we can without padding or the fixup.
-    errs() << "waka waka\n";
-    abort();
+    // Emit the Value as best we can without padding or a fixup.
     insert(getContext().allocFragment<MCLEBFragment>(*Value, false));
     return;
   }
