@@ -1,4 +1,4 @@
-//===-- WebAssemblyBranchHinting.cpp - Emit branch hints from LLVM IR    --===//
+//===-- WebAssemblyBranchHinting.cpp - Filter branch hints from LLVM IR  --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,10 +7,10 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Convert LLVM IR branch_weights
-/// (https://llvm.org/docs/LangRef.html#branch-weights) into metadata that will
-/// then be emitted as a wasm custom section for branch hints
-/// (https://github.com/WebAssembly/branch-hinting).
+/// Remove LLVM IR branch_weights that we do not want in wasm. Wasm branch hints
+/// are boolean, and always add size to the binary, so we only want to keep
+/// certainly-useful hints. Specifically, we keep hints that began as
+/// __builtin_expect in the source.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -50,7 +50,7 @@ public:
 
 char WebAssemblyBranchHinting::ID = 0;
 INITIALIZE_PASS(WebAssemblyBranchHinting, DEBUG_TYPE,
-                "Emit WebAssembly branch hints",
+                "Filter WebAssembly branch hints",
                 false, false)
 
 FunctionPass *llvm::createWebAssemblyBranchHinting() {
@@ -84,7 +84,7 @@ void WebAssemblyBranchHinting::visitBranchInst(BranchInst &I) {
 }
 
 bool WebAssemblyBranchHinting::runOnFunction(Function &F) {
-  LLVM_DEBUG(dbgs() << "********** Emit wasm branch hints **********\n"
+  LLVM_DEBUG(dbgs() << "********** Filter wasm branch hints **********\n"
                        "********** Function: "
                     << F.getName() << '\n');
 
