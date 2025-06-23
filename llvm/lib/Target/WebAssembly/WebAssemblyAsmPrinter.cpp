@@ -717,9 +717,10 @@ errs() << "  to target " << *TrueDest << '\n';
   if (!isFromExpected(ProbTarget))
     return {};
 
+
   const BranchProbability Half = BranchProbability(1, 2);
   assert(ProbTarget != Half);
-errs() << "  emit " << (ProbTarget > Half) << '\n';
+errs() << "waka EMITT! " << ProbTarget << " vs " << Half << '\n';
   return ProbTarget > Half;
 }
 

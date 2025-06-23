@@ -1,12 +1,19 @@
 ; RUN: llc -mtriple=wasm32-unknown-unknown -filetype=asm -o - < %s | FileCheck %s
 
 define i32 @bw_bh_test(i32 %a, i32 %b) {
-; The weights 42 (true branch) and 1337 (false branch) mean the false
-; branch is significantly more likely. The test should generate a hint of "0"
-; (unlikely).
 entry:
   %1 = icmp ult i32 %a, %b
   br i1 %1, label %fail, label %success, !prof !0
+
+; The weights below mean we are far more likely to go to %fail and return -1.
+; Codegen will emit the -1 first (the same as appearing here):
+
+; CHECK:	i32.const	-1
+; CHECK:	i32.const	0
+
+; Given that layout, we must emit a hint of 0, below, for the value of the hint:
+; the VM can assume the condition of the br_if is likely *false*, which means we
+; likely fall through to return -1.
 
 ; CHECK:	    .section	.custom_section.metadata.code.branch_hint,"",@
 
@@ -35,6 +42,6 @@ success:
   ret i32 0
 }
 
-!0 = !{!"branch_weights", !"expected", i32 1, i32 2000}
+!0 = !{!"branch_weights", !"expected", i32 2000, i32 1}
 
 ; TODO: a test that starts as asm, and checks either disassembly/objdump or YAML output. Something like llvm/test/MC/WebAssembly/debuginfo-relocs.s or the similar tests in there.
