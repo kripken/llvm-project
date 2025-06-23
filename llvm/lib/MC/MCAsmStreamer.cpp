@@ -1413,7 +1413,7 @@ void MCAsmStreamer::emitULEB128Value(const MCExpr *Value,
   if (!PadTo)
     OS << "\t.uleb128 ";
   else {
-    // A padding size has been specified. For now, all that is suppored is a 5-
+    // A padding size has been specified. For now, all that is supported is a 5-
     // byte LEB, which is an int32.
     assert(PadTo == 5);
     OS << "\t.uleb128_int32 ";
