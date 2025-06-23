@@ -282,5 +282,67 @@ void CustomSection::writeRelocations(raw_ostream &os) const {
     s->writeRelocations(os);
 }
 
+// Branch Hints
+
+void BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : CustomSection("metadata.code.branch_hint", inputSections) {
+  // Replace the original input sections with artificial ones. The change we
+  // make is to add the total number of functions across all sections to the
+  // first section's first 5 bytes, and then to delete the first 5 bytes in all
+  // subsequent sections. After that, simply concatenating the sections leads to
+  // the proper output.
+  assert(!inputSections.empty());
+  if (inputSections.size() == 1) {
+    // Nothing to do.
+    return;
+  }
+
+  auto *newInputSections = make<std::vector<InputChunk *>>();
+  newInputSections.resize(inputSections.size());
+
+  // Remove the first 5 bytes from all sections but the first, and count how
+  // many functions there are (so we can add that to the first).
+  uint64_t totalFunctions = 0;
+  for (unsigned i = 1; i < inputSections.size(); i++) {
+    const InputChunk *section = inputSections[i];
+    assert(section.kind() == InputChunk::Section);
+
+    // Read the number of functions in this section.
+    totalFunctions += decodeULEB128(section->wasmSection.Content.data());
+
+    // Create an adjusted wasm section, without the first 5 bytes.
+    WasmSection *adjustedWasmSection = make<WasmSection>(section->wasmSection);
+    adjustedWasmSection.Content = adjustedWasmSection.Content.slice(5);
+    for (auto& relocation : adjustedWasmSection->relocations)
+      relocation.offset -= 5;
+
+    newInputSections[i] = make<InputSection>(adjustedWasmSection, section->file, section->alignment);
+  }
+
+  // Add the number of functions to the first section.
+  {
+    const InputChunk *section = inputSections[0];
+    assert(section.kind() == InputChunk::Section);
+
+    // Read the number of functions in this section.
+    totalFunctions += decodeULEB128(section->wasmSection.Content.data());
+
+    // Create an adjusted wasm section, with the first 5 bytes modified so that
+    // we apply the total number of functions.
+    WasmSection *adjustedWasmSection = make<WasmSection>(section->wasmSection);
+    adjustedWasmSection.Content = adjustedWasmSection.Content.copy();
+
+    std::string str;
+    raw_string_ostream os(str);
+    encodeULEB128(totalFunctions, os);
+    // XXX? os << name;
+    memcpy(adjustedWasmSection.Content.data(), str.data(), 5);
+
+    newInputSections[i] = make<InputSection>(adjustedWasmSection, section->file, section->alignment);
+  }
+
+  // Use these new artificial sections.
+  inputSections = newInputSections;
+}
+
 } // namespace wasm
 } // namespace lld

@@ -613,8 +613,30 @@ void WebAssemblyAsmPrinter::EmitBranchHints(Module &M) {
   OutStreamer->pushSection();
   OutStreamer->switchSection(BranchHintSection);
 
-  // Number of functions with hints.
-  OutStreamer->emitULEB128IntValue(AllFuncBranchHints.size());
+  // Number of functions with hints. We pad this to 5 bytes to make the linker's
+  // life easier: given multiple Branch Hint sections, wasm-ld will by default
+  // simply concatenate them, just like any other custom section. That would end
+  // up with
+  //
+  //   [num functions_1] : 5 byte LEB
+  //   [..data_1..]
+  //   [num functions_2] : 5 byte LEB
+  //   [..data_2..]
+  //   ..
+  //   [num functions_N] : 5 byte LEB
+  //   [..data_N..]
+  //
+  // To get this to the proper form the linker should emit we can trample the
+  // number of functions at the very start, and not emit the others:
+  //
+  //   [num functions_1 + _2 + .. + _N] : 5 byte LEB
+  //   [..data_1..]
+  //   [..data_2..]
+  //   ..
+  //   [..data_N..]
+  //
+  // TODO: fix existing tests for this  
+  OutStreamer->emitULEB128IntValue(AllFuncBranchHints.size(), 5);
 
   for (auto& FuncHints : AllFuncBranchHints) {
     auto* FuncSymbol = getSymbol(FuncHints.F);

@@ -166,7 +166,7 @@ void Writer::createCustomSections() {
   for (auto &pair : customSectionMapping) {
     StringRef name = pair.first;
 
-    if (name == "metadata.code.branch_hint")
+    if (name == "metadata.code.branch_hint") // XXX unneeded
       continue;
 
     dbgs() << "createCustomSection: " << name << "\n";
@@ -188,9 +188,9 @@ void Writer::createBranchHintSection() {
     return;
   auto& inputChunks = iter->second;
 
-  dbgs() << "createBranchHintSection: " << name << "\n";
+  dbgs() << "createBranchHintSection!: " << name << "\n";
 
-  OutputSection *sec = make<CustomSection>(std::string(name), inputChunks);
+  OutputSection *sec = make<BranchHintSection>(std::string(name), inputChunks);
   auto *sym = make<OutputSectionSymbol>(sec);
   out.linkingSec->addToSymtab(sym);
   sec->sectionSym = sym;

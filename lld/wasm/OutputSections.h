@@ -132,6 +132,37 @@ protected:
   std::string nameData;
 };
 
+// A Branch Hint section is a Custom Section with some custom rules for how it
+// is created. Rather than simply concatenate the input sections, we must also
+// adjust the field that reports the number of functions.
+//
+// Number of functions with hints. We pad this to 5 bytes to make the linker's
+// life easier: given multiple Branch Hint sections, wasm-ld will by default
+// simply concatenate them, just like any other custom section. That would end
+// up with
+//
+//   [num functions_1] : 5 byte LEB
+//   [..data_1..]
+//   [num functions_2] : 5 byte LEB
+//   [..data_2..]
+//   ..
+//   [num functions_N] : 5 byte LEB
+//   [..data_N..]
+//
+// To get this to the proper form the linker should emit we can trample the
+// number of functions at the very start, and not emit the others:
+//
+//   [num functions_1 + _2 + .. + _N] : 5 byte LEB
+//   [..data_1..]
+//   [..data_2..]
+//   ..
+//   [..data_N..]
+//
+class BranchHintSection : public CustomSection {
+public:
+  BranchHintSection(ArrayRef<InputChunk *> inputSections);
+};
+
 } // namespace wasm
 } // namespace lld
 

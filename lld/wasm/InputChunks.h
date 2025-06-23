@@ -354,9 +354,11 @@ public:
 
   const uint64_t tombstoneValue;
 
+  // XXX
+  const WasmSection &section;
+
 protected:
   static uint64_t getTombstoneForSection(StringRef name);
-  const WasmSection &section;
 };
 
 } // namespace wasm
