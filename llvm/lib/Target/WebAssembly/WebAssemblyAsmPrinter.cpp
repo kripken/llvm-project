@@ -664,8 +664,8 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
 
   // This is a BR. It has two successors, and perhaps branch probability
   // info between them. Finding the successor blocks is not trivial, since we
-  // run after CFGstackify, and even WebAssemblyInstrInfo::analyzeBranch returns
-  // that it cannot analyze branch targets. First, find the two successors of
+  // run after CFGstackify (and even WebAssemblyInstrInfo::analyzeBranch returns
+  // that it cannot analyze branch targets). First, find the two successors of
   // the parent block of this BR_IF.
   auto *ParentMBB = MI.getParent();
   assert(ParentMBB->succ_size() == 2);
@@ -673,33 +673,24 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   MachineBasicBlock* MBB1 = *iter;
   iter++;
   MachineBasicBlock* MBB2 = *iter;
-errs() << "  first : " << *MBB1 << '\n';
-errs() << "  second: " << *MBB2 << '\n';
 
-  // Iterate through the parent's basic blocks (linear time!) to find the
-  // block right after us, which is the fallthrough. If we branch, it is not to
-  // there.
+  // See which of the two successors is right after us: the fallthrough. If we
+  // branch, it is to the other block. So the block right after us is where we
+  // go if the br_if condition is false.
   auto ParentMBBI = ParentMBB->getIterator();
   ++ParentMBBI;
   // A block with a BR_IF must have something after it.
   assert(ParentMBBI != MF->end());
   auto *FalseDest = &*ParentMBBI;
-  MachineBasicBlock *TrueDest = FalseDest == MBB1 ? MBB2 : MBB1;
-  errs() << "MI: " << MI << '\n';
-  errs() << "False  : " << *FalseDest << '\n';
-  errs() << "TargetMBB: " << *TrueDest << '\n';
+  // It must be one of the successors.
+  assert(FalseDest == MBB1 || FalseDest == MBB2);
+  // The true destination (i.e. if the condition is true) is the other one.
+  MachineBasicBlock *TrueDest = (FalseDest == MBB1 ? MBB2 : MBB1);
 
-
-for (int i = 0; i < MI.getNumOperands(); i++) errs() << "operand[" << i << ": " << MI.getOperand(i) << '\n';
-assert(TrueDest);
+  // Find the probability of branching.
   const MachineBranchProbabilityInfo *MBPI =
       &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
-
   BranchProbability ProbTarget = MBPI->getEdgeProbability(ParentMBB, TrueDest);
-errs() << "BR_IF: " << MI << " with prob " << ProbTarget << '\n';
-
-errs() << "  to target " << *TrueDest << '\n';
-
 
   // Wasm branch hints are boolean, and each one takes space in the binary, so
   // we do not want to emit hints for trivial things like 55%/45%. Err on the
@@ -717,10 +708,8 @@ errs() << "  to target " << *TrueDest << '\n';
   if (!isFromExpected(ProbTarget))
     return {};
 
-
   const BranchProbability Half = BranchProbability(1, 2);
   assert(ProbTarget != Half);
-errs() << "waka EMITT! " << ProbTarget << " vs " << Half << '\n';
   return ProbTarget > Half;
 }
 
