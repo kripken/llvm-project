@@ -746,12 +746,12 @@ void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
   LLVM_DEBUG(dbgs() << "EmitInstruction: " << *MI << '\n');
 
   if (auto Hint = getBranchHint(*MI)) {
-    //errs() << "emit branch hint for inst!\n";
     // Create a temp symbol for this instruction, so we can refer to it.
     MCSymbol *InstructionSymbol = OutContext.createTempSymbol();
     OutStreamer->emitLabel(InstructionSymbol);
 
-    // Stash the hint for later, on the proper function.
+    // Stash the hint for later, on the proper function. We will emit the branch
+    // hints section at the end, when we know all the information we need.
     Function *F = &MF->getFunction();
     if (AllFuncBranchHints.empty() || AllFuncBranchHints.back().F != F) {
       AllFuncBranchHints.emplace_back(FuncBranchHints{F, {}});

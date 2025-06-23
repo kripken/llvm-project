@@ -31,8 +31,12 @@ private:
   // A branch hint for an instruction. We gather them all (& by function) so we
   // can emit the section at the end, knowing how many hints are present (which
   // must be emitted before the hints, so we can't do it in a streaming manner).
+  // And we must gather during emitInstruction(), as we must emit a label for
+  // each branch we want to annotate (so we can refer to it).
   struct BranchHint {
+    // The location the hint refers to.
     MCSymbol *Label;
+    // Whether the branch there is likely.
     bool IsLikely;
   };
 

@@ -500,7 +500,7 @@ void WebAssemblyPassConfig::addIRPasses() {
 
   // TODO flag (here and elsewhere)
   addPass(createWebAssemblyBranchHinting());
-  
+
   TargetPassConfig::addIRPasses();
 }
 
