@@ -196,7 +196,9 @@ void Writer::createBranchHintSection() {
   sec->sectionSym = sym;
   addSection(sec);
 
-  // Avoid processing it again in createCustomSections.
+  // After emitting this section, avoid processing it again in the place that
+  // custom sections are normally created, later in the binary (inside
+  // createCustomSections).
   customSectionMapping.erase("branch_hint");
 }
 
@@ -567,6 +569,9 @@ void Writer::addSections() {
   addSection(out.startSec);
   addSection(out.elemSec);
   addSection(out.dataCountSec);
+
+  // The Branch Hints section is a special custom section that must be emitted
+  // before the code section.
   createBranchHintSection();
 
   addSection(make<CodeSection>(out.functionSec->inputFunctions));
