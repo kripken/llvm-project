@@ -687,10 +687,10 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   // We only handle the simple case of our being the last terminator of the
   // block. If there are other terminators after us, things may be complicated.
   auto *ParentMBB = MI.getParent();
-  auto TerminatorRange = MBB.terminators();
-  assert(!TerminatorRange.empty());
-  auto *LastTerminator = &*TerminatorRange.rbegin();
-  if (&MI != LastTerminator)
+  const MachineInstr *LastTerminator = nullptr;
+  for (auto& Terminator : ParentMBB->terminators())
+    LastTerminator = &Terminator;
+  if (LastTerminator != &MI)
     return {};
 
   // This is a BR. It has two successors, and perhaps branch probability
