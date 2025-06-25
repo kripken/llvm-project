@@ -17,8 +17,8 @@ entry:
 
 ; CHECK:	    .section	.custom_section.metadata.code.branch_hint,"",@
 
-; Number of functions with hints.
-; CHECK-NEXT:	.int8	1
+; Number of functions with hints (1, padded LEB to 5 bytes
+; CHECK-NEXT: .asciz "\201\200\200\200"
 
 ; Function with the hint.
 ; CHECK-NEXT:	.uleb128_int32 bw_bh_test

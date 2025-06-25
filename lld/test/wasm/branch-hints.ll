@@ -22,8 +22,8 @@ success:
 
 ; CHECK:       - Type:            CUSTOM
 ; CHECK-NEXT:    Name:            metadata.code.branch_hint
-; CHECK-NEXT:    Payload:         '01818080800001080100'
-;                                  ^^ one function
+; CHECK-NEXT:    Payload: '8180808000818080800001080100'
+;                          ^^ one function (5-byte padded LEB)
 ;                                    ^^^^^^^^^^ LEB of function index 1
 ;                                              ^^ one hint in function
 ;                                                ^^ offset 8
