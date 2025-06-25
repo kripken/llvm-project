@@ -316,7 +316,7 @@ BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : Cus
     for (auto& relocation : adjustedWasmSection->Relocations)
       relocation.Offset -= 5;
 
-    (*newInputSections)[i] = make<InputSection>(adjustedWasmSection, section->file, section->alignment);
+    (*newInputSections)[i] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
   }
 
   // Add the number of functions to the first section.
@@ -331,15 +331,16 @@ BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : Cus
     // Create an adjusted wasm section, with the first 5 bytes modified so that
     // we apply the total number of functions.
     WasmSection *adjustedWasmSection = make<WasmSection>(wasmSection);
-    adjustedWasmSection->Content = adjustedWasmSection->Content.copy(getSpecificAllocSingleton<WasmSection>());
+    auto* adjustedContent = make<std::vector<uint8_t>>(adjustedWasmSection->Content.begin(), adjustedWasmSection->Content.end());
 
     std::string str;
     raw_string_ostream os(str);
     encodeULEB128(totalFunctions, os);
     // XXX? os << name;
-    memcpy(adjustedWasmSection->Content.data(), str.data(), 5);
+    memcpy(adjustedContent->data(), str.data(), 5);
+    adjustedWasmSection->Content = ArrayRef(adjustedContent->data(), adjustedContent->size());
 
-    (*newInputSections)[0] = make<InputSection>(adjustedWasmSection, section->file, section->alignment);
+    (*newInputSections)[0] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
   }
 
   // Use these new artificial sections.
