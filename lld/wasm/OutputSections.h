@@ -161,6 +161,8 @@ protected:
 class BranchHintSection : public CustomSection {
 public:
   BranchHintSection(ArrayRef<InputChunk *> inputSections);
+
+  static const char* sectionName() { return "metadata.code.branch_hint"; }
 };
 
 } // namespace wasm

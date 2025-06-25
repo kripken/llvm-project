@@ -182,7 +182,7 @@ void Writer::createCustomSections() {
 }
 
 void Writer::createBranchHintSection() {
-  StringRef name = "metadata.code.branch_hint";
+  StringRef name = BranchHintSection::sectionName();
   auto iter = customSectionMapping.find(name);
   if (iter == customSectionMapping.end())
     return;
@@ -190,7 +190,7 @@ void Writer::createBranchHintSection() {
 
   dbgs() << "createBranchHintSection!: " << name << "\n";
 
-  OutputSection *sec = make<BranchHintSection>(std::string(name), inputChunks);
+  auto *sec = make<BranchHintSection>(inputChunks);
   auto *sym = make<OutputSectionSymbol>(sec);
   out.linkingSec->addToSymtab(sym);
   sec->sectionSym = sym;
