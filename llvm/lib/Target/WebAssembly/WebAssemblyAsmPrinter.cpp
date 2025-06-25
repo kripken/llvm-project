@@ -684,13 +684,23 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   if (MI.getOpcode() != WebAssembly::BR_IF)
     return {};
 
+  // We only handle the simple case of our being the last terminator of the
+  // block. If there are other terminators after us, things may be complicated.
+  auto *ParentMBB = MI.getParent();
+  auto TerminatorRange = MBB.terminators();
+  assert(!TerminatorRange.empty());
+  auto *LastTerminator = &*TerminatorRange.rbegin();
+  if (&MI != LastTerminator)
+    return {};
+
   // This is a BR. It has two successors, and perhaps branch probability
   // info between them. Finding the successor blocks is not trivial, since we
   // run after CFGstackify (and even WebAssemblyInstrInfo::analyzeBranch returns
   // that it cannot analyze branch targets). First, find the two successors of
-  // the parent block of this BR_IF.
-  auto *ParentMBB = MI.getParent();
-  assert(ParentMBB->succ_size() == 2);
+  // the parent block of this BR_IF. (If there are three successors, due to some
+  // terminator before us, give up on this hint.)
+  if (ParentMBB->succ_size() != 2)
+    return {};
   auto iter = ParentMBB->succ_begin();
   MachineBasicBlock* MBB1 = *iter;
   iter++;
@@ -706,6 +716,22 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   auto *FalseDest = &*ParentMBBI;
   // It must be one of the successors.
   assert(FalseDest == MBB1 || FalseDest == MBB2);
+  // Stop if the fallthrough is an EH pad, because that could happen like this:
+  //
+  //  bb1:
+  //    ;; successor: if.true, otherwise
+  //    ..
+  //    br_if $if.true
+  //    br $otherwise
+  //
+  //  ehpad:
+  //
+  // If that br $otherwise is optimized out, it would look like we fall through
+  // to the ehpad (since it is the block physically after us), but in wasm's
+  // structured control flow that is not the case. Rather than try to find the
+  // true fallthrough, give up on a hint in this rare case.
+  if (FalseDest->isEHPad())
+    return {};
   // The true destination (i.e. if the condition is true) is the other one.
   MachineBasicBlock *TrueDest = (FalseDest == MBB1 ? MBB2 : MBB1);
 
