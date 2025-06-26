@@ -195,6 +195,7 @@ void Writer::createBranchHintSection() {
   out.linkingSec->addToSymtab(sym);
   sec->sectionSym = sym;
   addSection(sec);
+errs() << "added.\n";
 
   // After emitting this section, avoid processing it again in the place that
   // custom sections are normally created, later in the binary (inside
@@ -244,11 +245,13 @@ void Writer::writeHeader() {
 }
 
 void Writer::writeSections() {
+errs() << "writeSections1\n";
   uint8_t *buf = buffer->getBufferStart();
   parallelForEach(outputSections, [buf](OutputSection *s) {
     assert(s->isNeeded());
     s->writeTo(buf);
   });
+errs() << "writeSections2\n";
 }
 
 // Computes a hash value of Data using a given hash function.

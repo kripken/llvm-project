@@ -265,6 +265,12 @@ void CustomSection::writeTo(uint8_t *buf) {
   memcpy(buf, nameData.data(), nameData.size());
   buf += nameData.size();
 
+if (name == BranchHintSection::sectionName()) {
+  for (int i = 0; i < 5; i++) errs() << " Writing! [" << i << "] = " << int(static_cast<InputSection*>(inputSections[0])->section.Content[i]) << '\n';
+} else {
+errs() << "other sec: " << name << '\n';
+}
+
   // Write custom sections payload
   for (const InputChunk *section : inputSections)
     section->writeTo(buf);
@@ -290,14 +296,15 @@ BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : Cus
   // first section's first 5 bytes, and then to delete the first 5 bytes in all
   // subsequent sections. After that, simply concatenating the sections leads to
   // the proper output.
+errs() << "BANCH!\n";
   assert(!inputSections.empty());
   if (inputSections.size() == 1) {
     // Nothing to do.
     return;
   }
+errs() << "BANCH2!\n";
 
-  auto *newInputSections = make<std::vector<InputChunk *>>();
-  newInputSections->resize(inputSections.size());
+  std::vector<InputChunk *> newInputSections(inputSections.size());
 
   // Remove the first 5 bytes from all sections but the first, and count how
   // many functions there are (so we can add that to the first).
@@ -316,8 +323,11 @@ BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : Cus
     for (auto& relocation : adjustedWasmSection->Relocations)
       relocation.Offset -= 5;
 
-    (*newInputSections)[i] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
+    newInputSections[i] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
   }
+
+errs() << "BANCH extras " << totalFunctions << "\n";
+
 
   // Add the number of functions to the first section.
   {
@@ -328,23 +338,32 @@ BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : Cus
     // Read the number of functions in this section.
     totalFunctions += decodeULEB128(wasmSection.Content.data());
 
+errs() << "BANCH final total..: " << totalFunctions << "\n";
+
     // Create an adjusted wasm section, with the first 5 bytes modified so that
     // we apply the total number of functions.
     WasmSection *adjustedWasmSection = make<WasmSection>(wasmSection);
     auto* adjustedContent = make<std::vector<uint8_t>>(adjustedWasmSection->Content.begin(), adjustedWasmSection->Content.end());
+for (int i = 0; i < 5; i++) errs() << " adjustedContent[" << i << "] = " << int((*adjustedContent)[i]) << '\n';
 
     std::string str;
     raw_string_ostream os(str);
-    encodeULEB128(totalFunctions, os);
+    encodeULEB128(totalFunctions, os, 5);
+for (int i = 0; i < 5; i++) errs() << " str[" << i << "] = " << int(str[i]) << '\n';
     // XXX? os << name;
     memcpy(adjustedContent->data(), str.data(), 5);
+for (int i = 0; i < 5; i++) errs() << " adjustedContent[" << i << "] = " << int((*adjustedContent)[i]) << '\n';
     adjustedWasmSection->Content = ArrayRef(adjustedContent->data(), adjustedContent->size());
 
-    (*newInputSections)[0] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
+    newInputSections[0] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
   }
 
-  // Use these new artificial sections.
-  inputSections = ArrayRef(*newInputSections);
+for (int i = 0; i < 5; i++) errs() << " old[" << i << "] = " << int(static_cast<InputSection*>(inputSections[0])->section.Content[i]) << '\n';
+
+  // Use these new adjusted sections.
+  inputSections = std::move(newInputSections);
+
+for (int i = 0; i < 5; i++) errs() << " new[" << i << "] = " << int(static_cast<InputSection*>(inputSections[0])->section.Content[i]) << '\n';
 }
 
 } // namespace wasm
