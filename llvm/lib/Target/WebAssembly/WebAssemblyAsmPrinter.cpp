@@ -697,8 +697,8 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   // info between them. Finding the successor blocks is not trivial, since we
   // run after CFGstackify (and even WebAssemblyInstrInfo::analyzeBranch returns
   // that it cannot analyze branch targets). First, find the two successors of
-  // the parent block of this BR_IF. (If there are three successors, due to some
-  // terminator before us, give up on this hint.)
+  // the parent block of this BR_IF. (If there are three successors, due to an
+  // additional unwind (EH pad) successor, give up on this hint.)
   if (ParentMBB->succ_size() != 2)
     return {};
   auto iter = ParentMBB->succ_begin();
@@ -706,17 +706,15 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   iter++;
   MachineBasicBlock* MBB2 = *iter;
 
-  // See which of the two successors is right after us: the fallthrough. If we
-  // branch, it is to the other block. So the block right after us is where we
-  // go if the br_if condition is false.
+  // Find the fallthrough, that is, the block right after us, where control flow
+  // goes if we do not branch.
   auto ParentMBBI = ParentMBB->getIterator();
   ++ParentMBBI;
   // A block with a BR_IF must have something after it.
   assert(ParentMBBI != MF->end());
-  auto *FalseDest = &*ParentMBBI;
-  // It must be one of the successors.
-  assert(FalseDest == MBB1 || FalseDest == MBB2);
-  // Stop if the fallthrough is an EH pad, because that could happen like this:
+  auto *Fallthrough = &*ParentMBBI;
+  // In some corner cases, wasm's structured control flow makes it hard to infer
+  // control flow, like this:
   //
   //  bb1:
   //    ;; successor: if.true, otherwise
@@ -726,13 +724,18 @@ std::optional<bool> WebAssemblyAsmPrinter::getBranchHint(const MachineInstr& MI)
   //
   //  ehpad:
   //
-  // If that br $otherwise is optimized out, it would look like we fall through
+  // If `br $otherwise` is optimized out, it would look like we fall through
   // to the ehpad (since it is the block physically after us), but in wasm's
   // structured control flow that is not the case. Rather than try to find the
-  // true fallthrough, give up on a hint in this rare case.
-  if (FalseDest->isEHPad())
+  // true fallthrough, give up on a hint in any case where the fallthrough is
+  // not one of our block's successors.
+  if (Fallthrough != MBB1 && Fallthrough != MBB2)
     return {};
-  // The true destination (i.e. if the condition is true) is the other one.
+  // We ruled out complex cases, so what is left is simple control flow, and the
+  // false destination, i.e. where we go if the br_if condition is false, is the
+  // the fallthrough.
+  auto *FalseDest = Fallthrough;
+  // The true destination, i.e. if the condition is true, is the other one.
   MachineBasicBlock *TrueDest = (FalseDest == MBB1 ? MBB2 : MBB1);
 
   // Find the probability of branching.
