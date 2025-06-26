@@ -18,12 +18,13 @@ success:
 
 !0 = !{!"branch_weights", !"expected", i32 2000, i32 1}
 
+; Test that we combine branch hint sections properly. The number of functions
+; should be reported once at the start (even though it appears in each object
+; file, and the hints for each object file should then be concatenated).
 ; CHECK:       - Type:            CUSTOM
 ; CHECK-NEXT:    Name:            metadata.code.branch_hint
-; CHECK-NEXT:    Payload: '8180808000818080800001080100'
-;                          ^^ one function (5-byte padded LEB)
-;                                    ^^^^^^^^^^ LEB of function index 1
-;                                              ^^ one hint in function
-;                                                ^^ offset 8
-;                                                  ^^ hint size 1
-;                                                    ^^ hint value: 0
+; CHECK-NEXT:    Payload: '8280808000818080800001080100828080800001080101'
+;                          ^^ two functions (5-byte padded LEB)
+;                                    ^^hint for func 1^
+;                                                      ^^hint for func 2^
+
