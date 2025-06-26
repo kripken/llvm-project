@@ -265,12 +265,6 @@ void CustomSection::writeTo(uint8_t *buf) {
   memcpy(buf, nameData.data(), nameData.size());
   buf += nameData.size();
 
-if (name == BranchHintSection::sectionName()) {
-  for (int i = 0; i < 5; i++) errs() << " Writing! [" << i << "] = " << int(static_cast<InputSection*>(inputSections[0])->section.Content[i]) << '\n';
-} else {
-errs() << "other sec: " << name << '\n';
-}
-
   // Write custom sections payload
   for (const InputChunk *section : inputSections)
     section->writeTo(buf);
@@ -286,84 +280,6 @@ uint32_t CustomSection::getNumRelocations() const {
 void CustomSection::writeRelocations(raw_ostream &os) const {
   for (const InputChunk *s : inputSections)
     s->writeRelocations(os);
-}
-
-// Branch Hints
-
-BranchHintSection::BranchHintSection(ArrayRef<InputChunk *> inputSections) : CustomSection(sectionName(), inputSections) {
-  // Replace the original input sections with artificial ones. The change we
-  // make is to add the total number of functions across all sections to the
-  // first section's first 5 bytes, and then to delete the first 5 bytes in all
-  // subsequent sections. After that, simply concatenating the sections leads to
-  // the proper output.
-errs() << "BANCH!\n";
-  assert(!inputSections.empty());
-  if (inputSections.size() == 1) {
-    // Nothing to do.
-    return;
-  }
-errs() << "BANCH2!\n";
-
-  std::vector<InputChunk *> newInputSections(inputSections.size());
-
-  // Remove the first 5 bytes from all sections but the first, and count how
-  // many functions there are (so we can add that to the first).
-  uint64_t totalFunctions = 0;
-  for (unsigned i = 1; i < inputSections.size(); i++) {
-    assert(InputSection::classof(inputSections[i]));
-    auto *section = static_cast<InputSection*>(inputSections[i]);
-    const WasmSection &wasmSection = section->section;
-
-    // Read the number of functions in this section.
-    totalFunctions += decodeULEB128(wasmSection.Content.data());
-
-    // Create an adjusted wasm section, without the first 5 bytes.
-    WasmSection *adjustedWasmSection = make<WasmSection>(wasmSection);
-    adjustedWasmSection->Content = adjustedWasmSection->Content.slice(5);
-    for (auto& relocation : adjustedWasmSection->Relocations)
-      relocation.Offset -= 5;
-
-    newInputSections[i] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
-  }
-
-errs() << "BANCH extras " << totalFunctions << "\n";
-
-
-  // Add the number of functions to the first section.
-  {
-    assert(InputSection::classof(inputSections[0]));
-    auto *section = static_cast<InputSection*>(inputSections[0]);
-    const WasmSection &wasmSection = section->section;
-
-    // Read the number of functions in this section.
-    totalFunctions += decodeULEB128(wasmSection.Content.data());
-
-errs() << "BANCH final total..: " << totalFunctions << "\n";
-
-    // Create an adjusted wasm section, with the first 5 bytes modified so that
-    // we apply the total number of functions.
-    WasmSection *adjustedWasmSection = make<WasmSection>(wasmSection);
-    auto* adjustedContent = make<std::vector<uint8_t>>(adjustedWasmSection->Content.begin(), adjustedWasmSection->Content.end());
-for (int i = 0; i < 5; i++) errs() << " adjustedContent[" << i << "] = " << int((*adjustedContent)[i]) << '\n';
-
-    std::string str;
-    raw_string_ostream os(str);
-    encodeULEB128(totalFunctions, os, 5);
-for (int i = 0; i < 5; i++) errs() << " str[" << i << "] = " << int(str[i]) << '\n';
-    // XXX? os << name;
-    memcpy(adjustedContent->data(), str.data(), 5);
-for (int i = 0; i < 5; i++) errs() << " adjustedContent[" << i << "] = " << int((*adjustedContent)[i]) << '\n';
-    adjustedWasmSection->Content = ArrayRef(adjustedContent->data(), adjustedContent->size());
-
-    newInputSections[0] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
-  }
-
-for (int i = 0; i < 5; i++) errs() << " old[" << i << "] = " << int(static_cast<InputSection*>(inputSections[0])->section.Content[i]) << '\n';
-
-  // Use these new adjusted sections.
-  inputSections = std::move(newInputSections);
-
-for (int i = 0; i < 5; i++) errs() << " new[" << i << "] = " << int(static_cast<InputSection*>(inputSections[0])->section.Content[i]) << '\n';
 }
 
 } // namespace wasm

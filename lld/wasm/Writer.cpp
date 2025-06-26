@@ -28,6 +28,7 @@
 #include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/LEB128.h"
 #include "llvm/Support/Parallel.h"
 #include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/SHA1.h"
@@ -181,8 +182,42 @@ void Writer::createCustomSections() {
   }
 }
 
+// A Branch Hint section is a Custom Section with some custom rules for how it
+// is created. Rather than simply concatenate the input sections, we must also
+// adjust the field that reports the number of functions, as follows.
+//
+// Our input chunks each begin with a 5-byte LEB of the number of functions. If
+// we simply concatenated, we'd get this:
+//
+//   ;; from object file 1
+//   [num functions_1] : 5 byte LEB
+//   [..data_1..]
+//   ;; from object file 2
+//   [num functions_2] : 5 byte LEB
+//   [..data_2..]
+//   ..
+//   ;; from object file N
+//   [num functions_N] : 5 byte LEB
+//   [..data_N..]
+//
+// But the final output should report the total number of functions at the very
+// start. To fix that, we must accumulate the total number of functions and use
+// that at the very start (which comes from the first object file), and we must
+// remove the first 5 bytes of the others:
+//
+//   [num functions_1 + _2 + .. + _N] : 5 byte LEB
+//   [..data_1..]
+//   [..data_2..]
+//   ..
+//   [..data_N..]
+//
+// That is now correct.
+//
+// Also, the Branch Hint section must appear *before* the code, so we call this
+// earlier than for other custom sections.
 void Writer::createBranchHintSection() {
-  StringRef name = BranchHintSection::sectionName();
+  std::string name = "metadata.code.branch_hint";
+
   auto iter = customSectionMapping.find(name);
   if (iter == customSectionMapping.end())
     return;
@@ -190,15 +225,75 @@ void Writer::createBranchHintSection() {
 
   dbgs() << "createBranchHintSection!: " << name << "\n";
 
-  auto *sec = make<BranchHintSection>(inputChunks);
+  assert(!inputChunks.empty());
+  CustomSection *sec;
+  if (inputChunks.size() == 1) {
+    // Just use the originals. We don't need to do any work.
+    sec = make<CustomSection>(name, inputChunks);
+  } else {
+    // We need to merge the input chunks in the special format that the spec
+    // expects, as explained above. To do so, create new input chunks with those
+    // minor modifications, and then the normal custom section behavior of
+    // concatenating the chunks will give us the right output.
+    auto *newInputChunksAlloc = make<std::vector<InputChunk *>>(inputChunks.size());
+    auto &newInputChunks = *newInputChunksAlloc;
+
+    // Remove the first 5 bytes from all sections but the first, and count how
+    // many functions there are (so we can add that to the first).
+    uint64_t totalFunctions = 0;
+    for (unsigned i = 1; i < inputChunks.size(); i++) {
+      assert(InputSection::classof(inputChunks[i]));
+      auto *section = static_cast<InputSection*>(inputChunks[i]);
+      const WasmSection &wasmSection = section->section;
+
+      // Read the number of functions in this section.
+      totalFunctions += decodeULEB128(wasmSection.Content.data());
+
+      // Create an adjusted wasm section, without the first 5 bytes.
+      WasmSection *adjustedWasmSection = make<WasmSection>(wasmSection);
+      adjustedWasmSection->Content = adjustedWasmSection->Content.slice(5);
+      for (auto& relocation : adjustedWasmSection->Relocations)
+        relocation.Offset -= 5;
+
+      newInputChunks[i] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
+      newInputChunks[i]->setRelocations(adjustedWasmSection->Relocations);
+    }
+
+    // Add the number of functions to the first section.
+    {
+      assert(InputSection::classof(inputChunks[0]));
+      auto *section = static_cast<InputSection*>(inputChunks[0]);
+      const WasmSection &wasmSection = section->section;
+
+      // Read the number of functions in this section.
+      totalFunctions += decodeULEB128(wasmSection.Content.data());
+
+      // Create an adjusted wasm section, with the first 5 bytes modified so that
+      // we apply the total number of functions.
+      WasmSection *adjustedWasmSection = make<WasmSection>(wasmSection);
+      auto* adjustedContent = make<std::vector<uint8_t>>(adjustedWasmSection->Content.begin(), adjustedWasmSection->Content.end());
+
+      std::string str;
+      raw_string_ostream os(str);
+      encodeULEB128(totalFunctions, os, 5);
+      memcpy(adjustedContent->data(), str.data(), 5);
+      adjustedWasmSection->Content = ArrayRef(adjustedContent->data(), adjustedContent->size());
+
+      newInputChunks[0] = make<InputSection>(*adjustedWasmSection, section->file, section->alignment);
+      newInputChunks[0]->setRelocations(adjustedWasmSection->Relocations);
+    }
+
+    sec = make<CustomSection>(name, newInputChunks);
+  }
+
+  // Otherwise, add the section normally, like any custom section.
   auto *sym = make<OutputSectionSymbol>(sec);
   out.linkingSec->addToSymtab(sym);
   sec->sectionSym = sym;
   addSection(sec);
-errs() << "added.\n";
 
   // After emitting this section, avoid processing it again in the place that
-  // custom sections are normally created, later in the binary (inside
+  // custom sections are normally created, which is later in the binary (inside
   // createCustomSections).
   customSectionMapping.erase("branch_hint");
 }
@@ -245,13 +340,11 @@ void Writer::writeHeader() {
 }
 
 void Writer::writeSections() {
-errs() << "writeSections1\n";
   uint8_t *buf = buffer->getBufferStart();
   parallelForEach(outputSections, [buf](OutputSection *s) {
     assert(s->isNeeded());
     s->writeTo(buf);
   });
-errs() << "writeSections2\n";
 }
 
 // Computes a hash value of Data using a given hash function.
@@ -573,8 +666,7 @@ void Writer::addSections() {
   addSection(out.elemSec);
   addSection(out.dataCountSec);
 
-  // The Branch Hints section is a special custom section that must be emitted
-  // before the code section.
+  // The Branch Hints section must be emitted before the code section.
   createBranchHintSection();
 
   addSection(make<CodeSection>(out.functionSec->inputFunctions));
